@@ -12,8 +12,8 @@ services:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=admin
       - DOCKER_INFLUXDB_INIT_PASSWORD=adminadmin
-      - DOCKER_INFLUXDB_INIT_ORG= HSAA
-      - DOCKER_INFLUXDB_INIT_BUCKET= 25s-cd-teamb
+      - DOCKER_INFLUXDB_INIT_ORG=HSAA
+      - DOCKER_INFLUXDB_INIT_BUCKET=5s-cd-teamb
       - DOCKER_INFLUXDB_INIT_RETENTION=4w
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mySuperSecretToken123!
     restart: always
@@ -34,6 +34,17 @@ services:
       - influxdb
     restart: always
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - "6333:6333"    # REST API
+      - "6334:6334"    # gRPC
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: always
+
 volumes:
   influxdb-data:
   grafana-data:
+  qdrant-data:
