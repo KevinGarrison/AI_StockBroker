@@ -43,6 +43,21 @@ services:
     volumes:
       - qdrant-data:/qdrant/storage
     restart: always
+  
+  backend:
+    build: ./backend
+    ports:
+      - "5000:5000"
+    depends_on:
+      - influxdb
+      - qdrant
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "4000:4000"
+    depends_on:
+      - backend
 
 volumes:
   influxdb-data:
