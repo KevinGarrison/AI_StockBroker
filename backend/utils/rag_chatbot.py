@@ -1,16 +1,19 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_qdrant import QdrantVectorStore
-from qdrant_client import QdrantClient
+from qdrant_client import QdrantClient, models
+from qdrant_client.models import Filter, FieldCondition, MatchValue
 from qdrant_client.http.models import Distance, VectorParams
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain.text_splitter import MarkdownTextSplitter
+from langchain_openai import OpenAIEmbeddings
 from dataclasses import dataclass
 import json
 from openai import OpenAI
 import requests
 import os
 from dotenv import load_dotenv
-
+import streamlit as st
+from uuid import uuid4
 load_dotenv()
 
 context_yfinance = None
@@ -19,72 +22,77 @@ context_sec = None
 
 @dataclass
 class RAG_Chatbot:
+    
     def process_text_to_qdrant(self, context_docs: str,
-                               collection_name=os.getenv('COLLECTION_NAME'), 
-                               host=os.getenv('QDRANT_HOST'),
-                               port=os.getenv('QDRANT_PORT'), 
-                               chunk_size=os.getenv('CHUNK_SIZE'),
-                               chunk_overlap=os.getenv('OVERLAP_SIZE')):
+                        collection_name=None,
+                        host=None,
+                        port=None,
+                        chunk_size=None,
+                        chunk_overlap=None,
+                        metadata=None):
         """
         Splits text into chunks and stores them in Qdrant vector DB.
-        
-        Parameters:
-            context_docs (str): The full raw text to chunk and embed.
-            collection_name (str): Qdrant collection name.
-            host (str): Qdrant host.
-            port (int): Qdrant port.
-            chunk_size (int): Max characters per chunk.
-            chunk_overlap (int): Overlap between chunks.
         """
         try:
-            # Split text into chunks
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap,
-                length_function=len,
-            )
-            chunks = splitter.split_text(context_docs)
-            documents = [Document(page_content=chunk) for chunk in chunks]
-            
-            embeddings = HuggingFaceEmbeddings(model_name=os.getenv('EMBEDDING_MODEL_NAME'))
+            collection_name = collection_name or os.getenv('COLLECTION_NAME')
+            host = host or os.getenv('QDRANT_HOST')
+            port = int(port or os.getenv('QDRANT_PORT'))
+            chunk_size = int(chunk_size or os.getenv('CHUNK_SIZE', 500))
+            chunk_overlap = int(chunk_overlap or os.getenv('OVERLAP_SIZE', 50))
+            metadata = metadata or {}
+            splitter = MarkdownTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+            # st.write('Metadata:', metadata)
+            chunks = splitter.split_text(str(context_docs))
+            documents = [Document(metadata=metadata, page_content=chunk) for chunk in chunks]
+            uuids = [str(uuid4()) for _ in range(len(documents))]
+            # st.write(documents)
+            openai_key = os.getenv("OPENAI_API_KEY")
+            if not openai_key:
+                raise EnvironmentError("OPENAI_API_KEY not set in environment.")
 
-            client = QdrantClient(
-                host=os.getenv('QDRANT_HOST'),
-                port=os.getenv('QDRANT_PORT'),
-            )
+            embeddings = OpenAIEmbeddings(model=os.getenv('EMBEDDING_MODEL_OPENAI'))
 
-            # Check if collection exists
-            if collection_name not in client.get_collections().collections:
-                # Create collection if it doesn't exist
+            client = QdrantClient(host=host, port=port)
+            existing_collections = [c.name for c in client.get_collections().collections]
+
+            if collection_name not in existing_collections:
+                st.write('No collection found. Creating one...')
+                vector_size = int(os.getenv('VECTOR_SIZE', 1536))  # default for OpenAI embeddings
                 client.create_collection(
-                    collection_name=os.getenv('COLLECTION_NAME'),
-                    vectors_config=VectorParams(size=os.getenv('VECTOR_SIZE'), distance=Distance.COSINE)
+                    collection_name=collection_name,
+                    vectors_config=VectorParams(size=vector_size, distance=models.Distance.COSINE)
                 )
 
-            # Store documents in Qdrant
-            vector_store = QdrantVectorStore.from_documents(
-                documents=documents,
+            url = f"http://{host}:{port}"
+
+            vector_store = QdrantVectorStore.from_existing_collection(
                 embedding=embeddings,
-                collection_name=os.getenv('COLLECTION_NAME'),
-                url=f"http://{host}:{port}"
+                collection_name=collection_name,
+                url=url,
             )
-            
-            print(f"Stored {len(documents)} chunks in Qdrant collection: '{os.getenv('COLLECTION_NAME')}'")
-            return vector_store
+
+            vector_store.add_documents(documents=documents, ids=uuids)
+            st.success(f"Added {len(documents)} documents to '{collection_name}' collection.")
+
         except Exception as e:
-            print('Data processing failed!', e)
-            
+            st.error(f"Data processing failed: {e}")
+
+
+
     def print_results(self, documents):
-        for i, doc in enumerate(documents, 1):
-            print(f"\n📄 Result #{i}")
-            print("-" * 40)
-            print("🔑 Metadata:")
-            for key, value in doc.metadata.items():
-                print(f"   {key}: {value}")
-            print("\n📄 Content:")
-            print(doc.page_content.strip())
+        for i, item in enumerate(documents, 1):
+            doc = item[0] if isinstance(item, tuple) else item
+            st.write(f"**Result #{i}**")
+            st.write(doc.page_content)
+            st.write(doc.metadata)
+            st.markdown("---")
+
             
-    def query_qdrant(self, prompt=None, collection_name=os.getenv('COLLECTION_NAME'), host=os.getenv('QDRANT_HOST'), port=os.getenv('QDRANT_PORT')):
+            
+    def query_qdrant(self, prompt=None,
+                    collection_name=os.getenv('COLLECTION_NAME'),
+                    host=os.getenv('QDRANT_HOST'),
+                    port=os.getenv('QDRANT_PORT'))->list[Document]:
         if not prompt:
             print("❌ No query prompt provided.")
             return
@@ -96,23 +104,26 @@ class RAG_Chatbot:
                 port=os.getenv('QDRANT_PORT'),
             )
             
-            embeddings = HuggingFaceEmbeddings(model_name=os.getenv('EMBEDDING_MODEL_NAME'))
+            embeddings = OpenAIEmbeddings(model=os.getenv('EMBEDDING_MODEL_OPENAI'))
 
-            vector_store = QdrantVectorStore(
+            vector_store= QdrantVectorStore.from_existing_collection(
                 client=client,
-                collection_name=os.getenv('COLLECTION_NAME'),
                 embedding=embeddings,
+                collection_name=os.getenv('COLLECTION_NAME'),
+                url=f"http://{host}:{port}"
             )
             
             results = vector_store.similarity_search(
-                query, k=2
+                prompt, k=2
             )
             
             self.print_results(results)
+            return results
         except Exception as e:
             print(f"❌ Error during Qdrant query: {e}")
     
-    def gpt4o_mini(self, company_facts, context_y_finance, context_sec):
+    
+    def gpt4o_mini(self, company_facts, context_y_finance, context_sec)->str:
         try:
             client = OpenAI()
 
@@ -141,6 +152,9 @@ class RAG_Chatbot:
                         4. Final Recommendation:
                         - Clearly state a one-word recommendation: BUY, HOLD, or SELL.
                         - Briefly justify the decision based on the analysis above.
+                        
+                        5. Meta Data SEC Files:
+                        - List here only the Metadata of the SEC Files not the Content.
 
                         Here are the company facts:
                         {company_facts}
@@ -148,7 +162,7 @@ class RAG_Chatbot:
                         Here is the data from yahoo finance:
                         {context_y_finance}
 
-                        Here are the key facts from sec filings:
+                        Here are the key facts from SEC filings:
                         {context_sec}
 
                         Respond with the company facts (company name, ..) and then a very brief structured explanation followed by the final recommendation in caps lock'''
@@ -165,7 +179,7 @@ class RAG_Chatbot:
         
 
 
-    def deepseek_r1(self, company_facts, context_y_finance, context_sec):
+    def deepseek_r1(self, company_facts, context_y_finance, context_sec)->str:
         try:
             HEADERS = {
                 'Authorization': f"Bearer {os.environ.get('DEEPSEEK_API_KEY')}",
@@ -196,13 +210,16 @@ class RAG_Chatbot:
                     - Clearly state a one-word recommendation: BUY, HOLD, or SELL.
                     - Briefly justify the decision based on the analysis above.
                     
+                    5. Meta Data SEC Files:
+                        - List here only the Metadata of the SEC Files not the Content.
+                    
                     Here are the company facts:
                     {company_facts}
                     
                     Here is the data from yahoo finance:
                     {context_y_finance}
 
-                    Here are the key facts from sec filings:
+                    Here are the key facts from SEC filings:
                     {context_sec}
 
                     Respond with the company facts (company name, ..) and then a very brief structured explanation followed by the final recommendation in caps lock'''}
@@ -226,22 +243,3 @@ class RAG_Chatbot:
         except Exception as e:
             return f"Unexpected error: {e}"
 
-
-
-        
-
-if __name__ == "__main__":
-    chatbot = RAG_Chatbot()
-    example_text = """
-    DeepSeek is an open-source initiative focused on building high-performance large language models (LLMs). 
-    Its models are designed to support reasoning, coding, and advanced natural language understanding.
-
-    Qdrant is a vector database optimized for storing and searching high-dimensional embeddings. 
-    It enables semantic search and real-time AI applications by providing fast and accurate similarity queries.
-
-    LangChain is a framework that allows developers to build applications with language models. 
-    It supports document retrieval, agents, tools, and memory features, making it ideal for RAG-based workflows.
-    """
-    chatbot.process_text_to_qdrant(context_docs=example_text)
-    query = "What is Qdrant used for?"
-    chatbot.query_qdrant(prompt=query)
