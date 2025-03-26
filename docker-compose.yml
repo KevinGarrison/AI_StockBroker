@@ -51,6 +51,7 @@ services:
   #   depends_on:
   #     - influxdb
   #     - qdrant
+  #   restart: always
 
   # frontend:
   #   build: ./frontend
@@ -58,6 +59,7 @@ services:
   #     - "4000:4000"
   #   depends_on:
   #     - backend
+  #   restart: always
 
 volumes:
   influxdb-data:
