@@ -28,8 +28,6 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=adminadmin
-      # - GF_USERS_ALLOW_SIGN_UP=false
-      # - GF_AUTH_ANONYMOUS_ENABLED=false
     depends_on:
       - influxdb
     restart: always
@@ -43,23 +41,37 @@ services:
     volumes:
       - qdrant-data:/qdrant/storage
     restart: always
-  
-  # backend:
-  #   build: ./backend
-  #   ports:
-  #     - "5000:5000"
-  #   depends_on:
-  #     - influxdb
-  #     - qdrant
-  #   restart: always
 
-  # frontend:
-  #   build: ./frontend
-  #   ports:
-  #     - "4000:4000"
-  #   depends_on:
-  #     - backend
-  #   restart: always
+  backend:
+    build: ./backend
+    container_name: fastapi-backend
+    expose:
+      - "8000"
+    depends_on:
+      - influxdb
+      - qdrant
+    restart: always
+
+  frontend:
+    build: ./frontend
+    container_name: tbd-frontend
+    expose:
+      - "4000"
+    depends_on:
+      - backend
+    restart: always
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    restart: always
 
 volumes:
   influxdb-data:
