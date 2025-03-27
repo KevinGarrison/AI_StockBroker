@@ -1,136 +1,123 @@
 from dataclasses import dataclass
-import requests
+import httpx
+import asyncio
 import pandas as pd
-import streamlit as st
 from dotenv import load_dotenv
 import os
 import yfinance as yf
 from yahoo_fin import stock_info as si
-from datetime import date
-import json
 
 load_dotenv()
 
 @dataclass
 class API_Fetcher:
     
-    def fetch_all_major_indices(self):
-        # Retrieve tickers for major indices
-        dow_tickers = si.tickers_dow()
-        nasdaq_tickers = si.tickers_nasdaq()
-        sp500_tickers = si.tickers_sp500()
-        all_tickers = set(dow_tickers + nasdaq_tickers + sp500_tickers)
+    
+    async def fetch_all_major_indices(self):
+        dow = await asyncio.to_thread(si.tickers_dow)
+        nasdaq = await asyncio.to_thread(si.tickers_nasdaq)
+        sp500 = await asyncio.to_thread(si.tickers_sp500)
+        all_tickers =  set(dow + nasdaq + sp500)
         return all_tickers
     
-    
-    def fetch_company_cik_ticker_title(self)->pd.DataFrame:
+        
+    async def fetch_company_cik_ticker_title(self)->pd.DataFrame:
         try:
             headers = {'User-Agent': os.environ.get('USER_AGENT_SEC')}
-            company_tickers = requests.get(
-                "https://www.sec.gov/files/company_tickers.json",
-                headers=headers
-            )
-            company_data = pd.DataFrame(company_tickers.json()).T
-            return company_data
+            
+            async with httpx.AsyncClient() as client:
+                company_tickers = await client.get(
+                    "https://www.sec.gov/files/company_tickers.json",
+                    headers=headers
+                )
+                company_tickers.raise_for_status()
+                company_data = pd.DataFrame(company_tickers.json()).T
+                return company_data
+        except httpx.HTTPStatusError as e:
+            print(f"HTTP error while fetching SEC data: {e}")
+        except httpx.RequestError as e:
+            print(f"Request error: {e}")
         except Exception as e:
             print(f"Failed 'fetch_company_cik_ticker_title': {e}")    
     
-    def fetch_stock_data_yf(self, ticker, period="10y", interval="1mo")->dict[str, any]:
+
+    async def fetch_stock_data_yf(self, ticker:str=None, period:str="10y", interval:str="1mo") -> dict[str, any]:
         try:
             if not ticker:
                 raise ValueError(f"Fund '{ticker}' not found.")
-            
-            yf_ticker = yf.Ticker(ticker)
-            hist = yf_ticker.history(period=period, interval=interval)
-            info = yf_ticker.info
-            return {
-                "ticker": ticker,
-                "name": info.get("longName", ticker),
-                "expense_ratio": info.get("expenseRatio"),
-                "price_history": hist.get("Close"),
-                "info":info
-            }
+
+            def _fetch_data():
+                yf_ticker = yf.Ticker(ticker)
+                hist = yf_ticker.history(period=period, interval=interval)
+                info = yf_ticker.info
+                return {
+                    "ticker": ticker,
+                    "name": info.get("longName", ticker),
+                    "expense_ratio": info.get("expenseRatio"),
+                    "price_history": hist.get("Close"),
+                    "info": info
+                }
+
+            return await asyncio.to_thread(_fetch_data)
+
         except Exception as e:
-            print(f"Failed 'fetch_stock_data_yf': {e}")    
-    
-    def fetch_company_details_and_filing_accessions(self, cik)->tuple[dict[str, any], dict[str, any], dict[str, any]]:
+            print(f"Failed 'fetch_stock_data_yf': {e}")
+
+
+    async def fetch_company_details_and_filing_accessions(self, cik) -> tuple[dict[str, any], dict[str, any], dict[str, any]]:
         try:
-            USER_AGENT_SEC = os.getenv('USER_AGENT_SEC')
+            USER_AGENT_SEC = os.getenv('USER_AGENT_SEC', 'default-agent')
             headers = {'User-Agent': USER_AGENT_SEC}
-            filingMetaData = requests.get(
-                f'https://data.sec.gov/submissions/CIK{cik}.json',
-                headers=headers
-            )
-            filing_dict = filingMetaData.json()
 
-            important_keys = [
-                "name", "tickers", "exchanges", "sicDescription",
-                "description", "website", "fiscalYearEnd"
-            ]
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f'https://data.sec.gov/submissions/CIK{cik}.json',
+                    headers=headers,
+                    timeout=15.0  # optional timeout
+                )
+                response.raise_for_status()
+                filing_dict = await response.json()
 
-            secondary_keys = [
-                "stateOfIncorporation", "stateOfIncorporationDescription",
-                "insiderTransactionForOwnerExists", "insiderTransactionForIssuerExists",
-                "category", "addresses"
-            ]
-            
+            if filing_dict:
+                important_keys = [
+                    "name", "tickers", "exchanges", "sicDescription",
+                    "description", "website", "fiscalYearEnd"
+                ]
 
-            # Filter dictionaries
-            first_meta_data_dict = {k: (v if v else "N/A") for k, v in filing_dict.items() if k in important_keys}
-            secondary_meta_data_dict = {k: (v if v else "N/A") for k, v in filing_dict.items() if k in secondary_keys}
-            filings = filing_dict['filings']
-            
-            return first_meta_data_dict, secondary_meta_data_dict, filings
+                secondary_keys = [
+                    "stateOfIncorporation", "stateOfIncorporationDescription",
+                    "insiderTransactionForOwnerExists", "insiderTransactionForIssuerExists",
+                    "category", "addresses"
+                ]
+
+                first_meta_data_dict = {k: (v if v else "N/A") for k, v in filing_dict.items() if k in important_keys}
+                secondary_meta_data_dict = {k: (v if v else "N/A") for k, v in filing_dict.items() if k in secondary_keys}
+                filings = filing_dict.get('filings', {})
+
+                return first_meta_data_dict, secondary_meta_data_dict, filings
+
         except Exception as e:
-                print(f"Failed 'fetch_company_details_and_filings_accesions': {e}")    
-    
-    def fetch_company_filings(self, cik, accession, filename)->bytes:
+            print(f"Failed 'fetch_company_details_and_filing_accessions': {e}")
+            return {}, {}, {}
+
+
+
+    async def fetch_company_filings(self, cik, accession, filename) -> bytes:
         try:
-            USER_AGENT_SEC = os.getenv('USER_AGENT_SEC')
+            USER_AGENT_SEC = os.getenv('USER_AGENT_SEC', 'default-agent')
             headers = {'User-Agent': USER_AGENT_SEC}
             url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{filename}"
-            response = requests.get(url, headers=headers)
-            if response.status_code == 200:
-                data = response.content
-            return data
+
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=headers, timeout=20.0)
+                response.raise_for_status()
+                return response.content  # This is already bytes
+
+        except httpx.HTTPStatusError as e:
+            print(f"HTTP error: {e}")
+        except httpx.RequestError as e:
+            print(f"Request error: {e}")
         except Exception as e:
-            print(f"Failed 'fetch_company_filings': {e}")    
-    
-    
-    # def fetch_company_data(self, tickers)->dict[str, any]:
-        
-    #     company_data = {}
+            print(f"Unexpected error in 'fetch_company_filings': {e}")
 
-    #     for tick in tickers:
-    #         try:
-    #             ticker = yf.Ticker(tick)
-    #             info = ticker.info
-    #             earnings_calendar = ticker.calendar
-    #             for key, value in list(earnings_calendar.items())[:3]:
-    #                 if isinstance(value, list):
-    #                     earnings_calendar[key] = [v.isoformat() for v in value]
-    #                 elif isinstance(value, date):
-    #                     earnings_calendar[key] = value.isoformat()
-    #                 else:
-    #                     earnings_calendar[key] = value
-    #             dividends = ticker.dividends.tail(5)
-    #             price_history = ticker.history(period="1y")["Close"]
-    #             news = [
-    #                 {
-    #                     "title":article['content']['title'],
-    #                     "summary": article['content']['summary']
-    #                 }
-    #                 for article in ticker.news[:3]
-    #             ]
-
-    #             company_data[tick] = {
-    #                 "market_cap": info.get("marketCap"),
-    #                 "trailing_pe": info.get("trailingPE"),
-    #                 "earnings_calendar": earnings_calendar,
-    #                 "recent_dividends": dividends,
-    #                 "price_history": price_history,
-    #                 "news": news,
-    #             }
-    #         except Exception as e:
-    #             print(f"⚠️ Error loading {tick}: {e}")
-    #     return company_data
+        return b""
