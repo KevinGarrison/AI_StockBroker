@@ -34,13 +34,8 @@ mapping_latest_forms_doc_index = {}
 important_forms = ['10-K', '10-Q', '8-K', 'S-1', 'S-3', 'DEF 14A', '20-F', '6-K', '4', '13D', '13G']
 
 
-# Get all Major Tickers and Fetch a Dataframe containing all CIK ID's, Ticker, Company Titles 
-# available on sec.gov and the get union of yFinance and SEC Data
-all_tickers = fetcher.fetch_all_major_indices()
-company_ids = fetcher.fetch_company_cik_ticker_title()
-common = set(all_tickers) & set(company_ids["ticker"])
-tickers = [t for t in all_tickers if t in common]
-company_ticker = company_ids[company_ids["ticker"].isin(common)]
+ticker, company_ids = fetcher.get_base_data()
+
 
 # Selectbox
 selected_companies = st.multiselect('Choose your prefered stocks:', company_ticker['title'])

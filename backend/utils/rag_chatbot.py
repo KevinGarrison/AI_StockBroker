@@ -21,11 +21,24 @@ class RAG_Chatbot:
     
     # Connect to qdrant client
     async def connect_to_qdrant(self, host:str=None, port:int=None)->AsyncQdrantClient:
-        host = str(host) or os.getenv('QDRANT_HOST')
-        port = int(port) or int(os.getenv('QDRANT_PORT'))
-        client = AsyncQdrantClient(host=host, port=port)
-        return client
-    
+        try:
+            host = str(host) or os.getenv('QDRANT_HOST')
+            port = int(port) or int(os.getenv('QDRANT_PORT'))
+            client = AsyncQdrantClient(host=host, port=port)
+            return client
+        except Exception as e:
+            print(f"Error while connecting to Qdrant: {e}")
+        
+    async def delete_session_stored_docs(self, client:AsyncQdrantClient=None,
+                                            collection_name:str=None,
+                                            ):
+        try:
+            collection_name = str(collection_name) or os.getenv('COLLECTION_NAME')
+            client.delete_collection(collection_name=os.environ.get('COLLECTION_NAME'))
+            print(f'Collection {collection_name} deleted')
+        except Exception as e:
+            print(f"Error {e} while deleting collection {collection_name}")
+            
 
     async def process_text_to_qdrant(self, context_docs:str=None,
                             collection_name:str=None,

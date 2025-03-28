@@ -40,19 +40,29 @@ class API_Fetcher:
         except Exception as e:
             print(f"Failed 'fetch_company_cik_ticker_title': {e}")    
     
+    async def get_available_company_data(self, selected_ticker:str=None):
+        # Get all Major Tickers and Fetch a Dataframe containing all CIK ID's, Ticker, Company Titles 
+        # available on sec.gov and the get union of yFinance and SEC Data
+        all_tickers = await self.fetch_all_major_indices()
+        company_ids = await self.fetch_company_cik_ticker_title()
+        common = set(all_tickers) & set(company_ids["ticker"])
+        subset_tickers = [t for t in all_tickers if t in common]
+        subset_company_cik_ticker_title = company_ids[company_ids["ticker"].isin(common)]
+        return subset_tickers, subset_company_cik_ticker_title
 
-    async def fetch_stock_data_yf(self, ticker:str=None, period:str="10y", interval:str="1mo") -> dict[str, any]:
+
+    async def fetch_selected_stock_data_yf(self, selected_ticker:str=None, period:str="10y", interval:str="1mo") -> dict[str, any]:
         try:
             if not ticker:
-                raise ValueError(f"Fund '{ticker}' not found.")
+                raise ValueError(f"Fund '{selected_ticker}' not found.")
 
             def _fetch_data():
-                yf_ticker = yf.Ticker(ticker)
+                yf_ticker = yf.Ticker(selected_ticker)
                 hist = yf_ticker.history(period=period, interval=interval)
                 info = yf_ticker.info
                 return {
-                    "ticker": ticker,
-                    "name": info.get("longName", ticker),
+                    "ticker": selected_ticker,
+                    "name": info.get("longName", selected_ticker),
                     "expense_ratio": info.get("expenseRatio"),
                     "price_history": hist.get("Close"),
                     "info": info
@@ -64,14 +74,14 @@ class API_Fetcher:
             print(f"Failed 'fetch_stock_data_yf': {e}")
 
 
-    async def fetch_company_details_and_filing_accessions(self, cik) -> tuple[dict[str, any], dict[str, any], dict[str, any]]:
+    async def fetch_selected_company_details_and_filing_accessions(self, selected_cik)->tuple[dict[str, any], dict[str, any], dict[str, any]]:
         try:
             USER_AGENT_SEC = os.getenv('USER_AGENT_SEC', 'default-agent')
             headers = {'User-Agent': USER_AGENT_SEC}
 
             async with httpx.AsyncClient() as client:
                 response = await client.get(
-                    f'https://data.sec.gov/submissions/CIK{cik}.json',
+                    f'https://data.sec.gov/submissions/CIK{selected_cik}.json',
                     headers=headers,
                     timeout=15.0  # optional timeout
                 )
@@ -102,7 +112,7 @@ class API_Fetcher:
 
 
 
-    async def fetch_company_filings(self, cik, accession, filename) -> bytes:
+    async def fetch_selected_company_filings(self, cik, accession, filename) -> bytes:
         try:
             USER_AGENT_SEC = os.getenv('USER_AGENT_SEC', 'default-agent')
             headers = {'User-Agent': USER_AGENT_SEC}
@@ -111,7 +121,7 @@ class API_Fetcher:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, headers=headers, timeout=20.0)
                 response.raise_for_status()
-                return response.content  # This is already bytes
+                return response.content
 
         except httpx.HTTPStatusError as e:
             print(f"HTTP error: {e}")
@@ -121,3 +131,5 @@ class API_Fetcher:
             print(f"Unexpected error in 'fetch_company_filings': {e}")
 
         return b""
+    
+    
