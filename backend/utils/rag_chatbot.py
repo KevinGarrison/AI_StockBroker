@@ -20,10 +20,10 @@ load_dotenv()
 class RAG_Chatbot:
     
     # Connect to qdrant client
-    async def connect_to_qdrant(self, host:str=None, port:int=None)->AsyncQdrantClient:
+    async def connect_to_qdrant(self, host:str=None, port:str=None)->AsyncQdrantClient:
         try:
             host = str(host) or os.getenv('QDRANT_HOST')
-            port = int(port) or int(os.getenv('QDRANT_PORT'))
+            port = str(port) or int(os.getenv('QDRANT_PORT'))
             client = AsyncQdrantClient(host=host, port=port)
             return client
         except Exception as e:
@@ -34,7 +34,7 @@ class RAG_Chatbot:
                                             ):
         try:
             collection_name = str(collection_name) or os.getenv('COLLECTION_NAME')
-            client.delete_collection(collection_name=os.environ.get('COLLECTION_NAME'))
+            await client.delete_collection(collection_name=os.environ.get('COLLECTION_NAME'))
             print(f'Collection {collection_name} deleted')
         except Exception as e:
             print(f"Error {e} while deleting collection {collection_name}")
