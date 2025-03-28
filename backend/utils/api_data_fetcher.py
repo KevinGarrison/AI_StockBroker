@@ -13,11 +13,11 @@ load_dotenv()
 class API_Fetcher:
     
     
-    async def fetch_all_major_indices(self):
+    async def fetch_all_major_indices(self)->set[str]:
         dow = await asyncio.to_thread(si.tickers_dow)
         nasdaq = await asyncio.to_thread(si.tickers_nasdaq)
         sp500 = await asyncio.to_thread(si.tickers_sp500)
-        all_tickers =  set(dow + nasdaq + sp500)
+        all_tickers =  dow + nasdaq + sp500
         return all_tickers
     
         
@@ -40,32 +40,91 @@ class API_Fetcher:
         except Exception as e:
             print(f"Failed 'fetch_company_cik_ticker_title': {e}")    
     
-    async def get_available_company_data(self, selected_ticker:str=None):
+    async def get_available_company_data(self)->tuple[list, pd.DataFrame]:
         # Get all Major Tickers and Fetch a Dataframe containing all CIK ID's, Ticker, Company Titles 
         # available on sec.gov and the get union of yFinance and SEC Data
         all_tickers = await self.fetch_all_major_indices()
         company_ids = await self.fetch_company_cik_ticker_title()
         common = set(all_tickers) & set(company_ids["ticker"])
-        subset_tickers = [t for t in all_tickers if t in common]
         subset_company_cik_ticker_title = company_ids[company_ids["ticker"].isin(common)]
-        return subset_tickers, subset_company_cik_ticker_title
-
-
+        return subset_company_cik_ticker_title
+#WORKS TILL HERE
+#-----------------------------------------------------------------------------------------------#
     async def fetch_selected_stock_data_yf(self, selected_ticker:str=None, period:str="10y", interval:str="1mo") -> dict[str, any]:
         try:
-            if not ticker:
+            if not selected_ticker:
                 raise ValueError(f"Fund '{selected_ticker}' not found.")
 
-            def _fetch_data():
+            def _fetch_data():    
                 yf_ticker = yf.Ticker(selected_ticker)
                 hist = yf_ticker.history(period=period, interval=interval)
                 info = yf_ticker.info
+
                 return {
                     "ticker": selected_ticker,
-                    "name": info.get("longName", selected_ticker),
+                    "name": info.get("longName"),
                     "expense_ratio": info.get("expenseRatio"),
-                    "price_history": hist.get("Close"),
-                    "info": info
+                    "price_history": hist.get('Close'),
+                    
+                    # Core Profile
+                    "sector": info.get("sector"),
+                    "industry": info.get("industry"),
+                    "website": info.get("website"),
+                    "fullTimeEmployees": info.get("fullTimeEmployees"),
+
+                    # Market Metrics
+                    "current_price": info.get("currentPrice"),
+                    "market_cap": info.get("marketCap"),
+                    "volume": info.get("volume"),
+                    "beta": info.get("beta"),
+
+                    # Valuation
+                    "trailing_pe": info.get("trailingPE"),
+                    "forward_pe": info.get("forwardPE"),
+                    "price_to_book": info.get("priceToBook"),
+                    "peg_ratio": info.get("trailingPegRatio"),
+                    "price_to_sales": info.get("priceToSalesTrailing12Months"),
+
+                    # Earnings
+                    "eps_trailing": info.get("epsTrailingTwelveMonths"),
+                    "eps_forward": info.get("epsForward"),
+                    "earnings_growth": info.get("earningsGrowth"),
+                    "revenue_growth": info.get("revenueGrowth"),
+                    "revenue": info.get("totalRevenue"),
+                    "net_income": info.get("netIncomeToCommon"),
+
+                    # Dividends
+                    "dividend_yield": info.get("dividendYield"),
+                    "dividend_rate": info.get("dividendRate"),
+                    "payout_ratio": info.get("payoutRatio"),
+                    "ex_dividend_date": info.get("exDividendDate"),
+
+                    # Performance
+                    "fifty_two_week_low": info.get("fiftyTwoWeekLow"),
+                    "fifty_two_week_high": info.get("fiftyTwoWeekHigh"),
+                    "fifty_two_week_change_percent": info.get("fiftyTwoWeekChangePercent"),
+                    "average_volume": info.get("averageVolume"),
+
+                    # Analyst Sentiment
+                    "recommendation_mean": info.get("recommendationMean"),
+                    "recommendation_key": info.get("recommendationKey"),
+                    "target_mean_price": info.get("targetMeanPrice"),
+                    "target_high_price": info.get("targetHighPrice"),
+                    "target_low_price": info.get("targetLowPrice"),
+
+                    # Balance Sheet / Risk
+                    "total_cash": info.get("totalCash"),
+                    "total_debt": info.get("totalDebt"),
+                    "current_ratio": info.get("currentRatio"),
+                    "quick_ratio": info.get("quickRatio"),
+                    "debt_to_equity": info.get("debtToEquity"),
+
+                    # Margins & Returns
+                    "gross_margins": info.get("grossMargins"),
+                    "operating_margins": info.get("operatingMargins"),
+                    "profit_margins": info.get("profitMargins"),
+                    "return_on_assets": info.get("returnOnAssets"),
+                    "return_on_equity": info.get("returnOnEquity"),
                 }
 
             return await asyncio.to_thread(_fetch_data)
@@ -83,10 +142,9 @@ class API_Fetcher:
                 response = await client.get(
                     f'https://data.sec.gov/submissions/CIK{selected_cik}.json',
                     headers=headers,
-                    timeout=15.0  # optional timeout
                 )
                 response.raise_for_status()
-                filing_dict = await response.json()
+                filing_dict = response.json()
 
             if filing_dict:
                 important_keys = [
@@ -110,9 +168,44 @@ class API_Fetcher:
             print(f"Failed 'fetch_company_details_and_filing_accessions': {e}")
             return {}, {}, {}
 
+    def get_latest_filings_index(self, filings:dict=None)->dict:
+        mapping_latest_forms_doc_index = {}
+        important_forms = ['10-K', '10-Q', '8-K', 'S-1', 'S-3', 'DEF 14A', '20-F', '6-K', '4', '13D', '13G']
+        for form in important_forms:
+            for index, row in enumerate(filings['recent']['form']):
+                if str(row) == form:
+                    mapping_latest_forms_doc_index[form] = index
+                    break
+        return mapping_latest_forms_doc_index
+    
+    
+    def create_base_df_for_sec_company_data(self,mapping_latest_docs:dict=None,
+                                            filings:dict=None, cik:str=None)->pd.DataFrame():
+        last_accession_numbers = []
+        report_dates = []
+        forms = []
+        primary_docs = []
+        idxs = []
 
+        for form, index in mapping_latest_docs.items():
+            last_accession_numbers.append(filings['recent']['accessionNumber'][index].replace('-', ''))
+            report_dates.append(filings['recent']['reportDate'][index])
+            forms.append(filings['recent']['form'][index])
+            primary_docs.append(filings['recent']['primaryDocument'][index])
+            idxs.append(index)
 
-    async def fetch_selected_company_filings(self, cik, accession, filename) -> bytes:
+        base_sec_df = pd.DataFrame({
+            'accession_number': last_accession_numbers,
+            'report_date': report_dates,
+            'form': forms,
+            'docs': primary_docs,
+            'cik': [cik] * len(forms),
+            'index': str(idxs)
+        })
+        return base_sec_df
+        
+        
+    async def _fetch_selected_company_filings(self, cik, accession, filename) -> bytes:
         try:
             USER_AGENT_SEC = os.getenv('USER_AGENT_SEC', 'default-agent')
             headers = {'User-Agent': USER_AGENT_SEC}
@@ -132,4 +225,12 @@ class API_Fetcher:
 
         return b""
     
-    
+    async def fetch_all_filings(self, base_sec_df):
+        all_filings = []
+        for _, row in base_sec_df.iterrows():
+            filings_dict = await self._fetch_selected_company_filings(cik=row['cik'], accession=row['accession_number'], filename=row['docs'])
+            all_filings.append(filings_dict)
+        if all_filings:
+            print('Files Succesful fetched from SEC.gov"')
+                
+        
