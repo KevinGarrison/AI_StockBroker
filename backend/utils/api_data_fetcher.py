@@ -35,7 +35,7 @@ class API_Fetcher:
         sp500 = await asyncio.to_thread(si.tickers_sp500)
         all_tickers =  dow + nasdaq + sp500
         return all_tickers
-    
+
         
     async def fetch_company_cik_ticker_title(self)->pd.DataFrame:
         try:
@@ -56,6 +56,7 @@ class API_Fetcher:
         except Exception as e:
             print(f"Failed 'fetch_company_cik_ticker_title': {e}")    
     
+    
     async def get_available_company_data(self)->tuple[list, pd.DataFrame]:
         # Get all Major Tickers and Fetch a Dataframe containing all CIK ID's, Ticker, Company Titles 
         # available on sec.gov and the get union of yFinance and SEC Data
@@ -64,6 +65,7 @@ class API_Fetcher:
         common = set(all_tickers) & set(company_ids["ticker"])
         subset_company_cik_ticker_title = company_ids[company_ids["ticker"].isin(common)]
         return subset_company_cik_ticker_title
+
 
     async def fetch_selected_stock_data_yf(self, selected_ticker:str=None, period:str="10y", interval:str="1mo") -> dict[str, any]:
         try:
@@ -183,6 +185,7 @@ class API_Fetcher:
             print(f"Failed 'fetch_company_details_and_filing_accessions': {e}")
             return {}, {}, {}
 
+
     def get_latest_filings_index(self, filings:dict=None)->dict:
         mapping_latest_forms_doc_index = {}
         important_forms = ['10-K', '10-Q', '8-K', 'S-1', 'S-3', 'DEF 14A', '20-F', '6-K', '4', '13D', '13G']
@@ -251,10 +254,6 @@ class API_Fetcher:
         return pd.Series(all_filings)
                 
 
-
-
-
-
     def preclean_for_llm(self, text: str = None) -> str:
         if text is None:
             return ""
@@ -306,13 +305,13 @@ Extract the **main readable content** from the following HTML or XML-like text, 
 
 1. **Ignore or summarize metadata** (e.g., headers, schema info, context tags like `<ix:header>`, `<context>`).
 2. **Preserve structure** using Markdown:
-   - Use `#`, `##`, `###` for titles and section headings.
-   - Convert bullet and numbered lists cleanly.
-   - Format any tables as **Markdown tables** with clear headers.
+    - Use `#`, `##`, `###` for titles and section headings.
+    - Convert bullet and numbered lists cleanly.
+    - Format any tables as **Markdown tables** with clear headers.
 3. **Clean up the text**:
-   - Replace escape characters (`\\n`, `\\t`, `\\r`) with real line breaks or tabs.
-   - Decode HTML/XML entities (e.g., `&nbsp;`, `&amp;`).
-   - Normalize spacing and remove redundant blank lines.
+    - Replace escape characters (`\\n`, `\\t`, `\\r`) with real line breaks or tabs.
+    - Decode HTML/XML entities (e.g., `&nbsp;`, `&amp;`).
+    - Normalize spacing and remove redundant blank lines.
 4. **Respond only with the extracted content.**
 ---
 

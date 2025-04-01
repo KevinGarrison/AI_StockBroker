@@ -42,7 +42,8 @@ class RAG_Chatbot:
         except Exception as e:
             logging.error(f"[Qdrant ERROR] Connection failed: {e}")
             raise
-        
+
+
     def connect_to_redis(self, host: str = None, port: int = None, db: int = 0, password: str = None) -> redis.Redis:
         try:
             host = host or os.getenv('REDIS_HOST', 'localhost')
@@ -57,6 +58,7 @@ class RAG_Chatbot:
             logging.error(f"[Redis ERROR] Connection failed: {e}")
             raise
 
+
     def delete_session_stored_docs(self, client: QdrantClient, collection_name: str = None):
         try:
             collection_name = collection_name or os.getenv('COLLECTION_NAME')
@@ -64,6 +66,7 @@ class RAG_Chatbot:
             logging.info(f"[Qdrant] Deleted collection '{collection_name}'")
         except Exception as e:
             logging.error(f"[Qdrant ERROR] Couldn't delete collection: {e}")
+
 
     def process_text_to_qdrant(self, context_docs: pd.DataFrame, client: QdrantClient, redis: redis.Redis) -> QdrantVectorStore:
         try:
@@ -148,6 +151,7 @@ class RAG_Chatbot:
             logging.error(f"[Qdrant ERROR] {e}")
             raise
 
+
     def query_qdrant(self, prompt: str, client: QdrantClient, collection_name: str = None) -> list[Document]:
         try:
             collection_name = collection_name or os.getenv('COLLECTION_NAME')
@@ -173,7 +177,6 @@ class RAG_Chatbot:
         except Exception as e:
             logging.error(f"[Qdrant ERROR] {e}")
             return []
-
 
 
     async def gpt4o_mini(self, company_facts:str=None, context_y_finance:str=None, context_sec:str=None)->str:

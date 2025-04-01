@@ -11,7 +11,6 @@ import time
 import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
-import os
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,38 +20,6 @@ logging.basicConfig(
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 load_dotenv()
-
-css = """
-<style>
-    body {
-        font-family: Arial, sans-serif;
-        padding: 20px;
-    }
-    table {
-        border-collapse: collapse;
-        width: 100%;
-        margin-bottom: 30px;
-    }
-    th, td {
-        border: 1px solid #ddd;
-        padding: 8px;
-        vertical-align: top;
-    }
-    tr:nth-child(even) {
-        background-color: #f9f9f9;
-    }
-    th {
-        background-color: #f2f2f2;
-        text-align: left;
-    }
-    h1, h2, h3 {
-        margin-top: 30px;
-        border-bottom: 1px solid #ddd;
-        padding-bottom: 5px;
-    }
-</style>
-"""
-
 
 app = FastAPI()
 
@@ -79,9 +46,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-result = None
-    
 # Vars
+result = None
 docs = None
 query=None
 
