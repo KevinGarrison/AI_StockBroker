@@ -4,8 +4,24 @@ import asyncio
 import pandas as pd
 from dotenv import load_dotenv
 import os
+from io import BytesIO
 import yfinance as yf
 from yahoo_fin import stock_info as si
+from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import DocumentStream
+import json
+import html
+from bs4 import BeautifulSoup
+from bs4 import XMLParsedAsHTMLWarning
+import logging
+import warnings
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 load_dotenv()
 
@@ -48,8 +64,7 @@ class API_Fetcher:
         common = set(all_tickers) & set(company_ids["ticker"])
         subset_company_cik_ticker_title = company_ids[company_ids["ticker"].isin(common)]
         return subset_company_cik_ticker_title
-#WORKS TILL HERE
-#-----------------------------------------------------------------------------------------------#
+
     async def fetch_selected_stock_data_yf(self, selected_ticker:str=None, period:str="10y", interval:str="1mo") -> dict[str, any]:
         try:
             if not selected_ticker:
@@ -180,7 +195,7 @@ class API_Fetcher:
     
     
     def create_base_df_for_sec_company_data(self,mapping_latest_docs:dict=None,
-                                            filings:dict=None, cik:str=None)->pd.DataFrame():
+                                            filings:dict=None, cik:str=None)->pd.DataFrame:
         last_accession_numbers = []
         report_dates = []
         forms = []
@@ -225,12 +240,126 @@ class API_Fetcher:
 
         return b""
     
-    async def fetch_all_filings(self, base_sec_df):
+    async def fetch_all_filings(self, base_sec_df: pd.DataFrame=None) -> pd.Series:
         all_filings = []
         for _, row in base_sec_df.iterrows():
-            filings_dict = await self._fetch_selected_company_filings(cik=row['cik'], accession=row['accession_number'], filename=row['docs'])
+            filings_dict = await self._fetch_selected_company_filings(cik=str(int(row['cik'])), accession=row['accession_number'], filename=row['docs'])
             all_filings.append(filings_dict)
         if all_filings:
-            print('Files Succesful fetched from SEC.gov"')
+            print('Files successfully fetched from SEC.gov')
+
+        return pd.Series(all_filings)
                 
-        
+
+
+
+
+
+    def preclean_for_llm(self, text: str = None) -> str:
+        if text is None:
+            return ""
+
+        soup = BeautifulSoup(text, "lxml")
+
+        for tag in soup.find_all(["ix", "xbrli", "link", "xlink"]):
+            tag.decompose()
+
+        for tag in soup.find_all(["dei", "us-gaap"]):
+            tag.unwrap() 
+
+        cleaned_text = soup.get_text()
+
+        cleaned_text = html.unescape(cleaned_text)
+
+        cleaned_text = cleaned_text.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "")
+
+        return cleaned_text.strip()
+
+
+    async def preprocess_docs_content(self, series: pd.Series) -> pd.Series:
+        series = series.copy()
+        cleaned_series = pd.Series(index=series.index, dtype=object)
+
+        async def process_row(index):
+            raw_content = series.at[index]
+
+            try:
+                html_stream = DocumentStream(name=f'sec_{index}', stream=BytesIO(raw_content))
+                converter = DocumentConverter()
+                result = converter.convert(html_stream)
+                cleaned_series.at[index] = result.document.export_to_markdown()
+                print(f'[docling] Parsed row {index}')
+                return
+            except Exception as e:
+                print(f'[docling] Failed at row {index}: {e}')
+
+            try:
+                decoded = raw_content.decode("utf-8", errors="ignore")
+                preprocessed = self.preclean_for_llm(decoded)
+
+                prompt = f"""
+Extract the **main readable content** from the following HTML or XML-like text, preserving logical document structure.
+
+---
+
+### Instructions:
+
+1. **Ignore or summarize metadata** (e.g., headers, schema info, context tags like `<ix:header>`, `<context>`).
+2. **Preserve structure** using Markdown:
+   - Use `#`, `##`, `###` for titles and section headings.
+   - Convert bullet and numbered lists cleanly.
+   - Format any tables as **Markdown tables** with clear headers.
+3. **Clean up the text**:
+   - Replace escape characters (`\\n`, `\\t`, `\\r`) with real line breaks or tabs.
+   - Decode HTML/XML entities (e.g., `&nbsp;`, `&amp;`).
+   - Normalize spacing and remove redundant blank lines.
+4. **Respond only with the extracted content.**
+---
+
+### Output Format:
+**Report Type (If given)**: 
+**Cleaned Content**
+
+---
+
+Raw content:
+{preprocessed[:200000]}
+"""
+
+
+                headers = {
+                    'Authorization': f"Bearer {os.environ.get('DEEPSEEK_API_KEY')}",
+                    'Content-Type': 'application/json',
+                }
+
+                data = {
+                    'model': 'deepseek-chat',
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'stream': False
+                }
+
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(
+                        "https://api.deepseek.com/chat/completions",
+                        headers=headers,
+                        data=json.dumps(data)
+                    )
+                    response.raise_for_status()
+                    result = response.json()
+                    markdown = result['choices'][0]['message']['content']
+                    cleaned_series.at[index] = markdown
+                    print(f'[deepseek] Parsed row {index}')
+
+            except httpx.RequestError as e:
+                print(f"[deepseek] Request error at row {index}: {e}")
+                cleaned_series.at[index] = None
+            except Exception as e:
+                print(f"[deepseek] Unexpected error at row {index}: {e}")
+                cleaned_series.at[index] = None
+
+        tasks = [process_row(index) for index in series.index]
+        await asyncio.gather(*tasks)
+        return cleaned_series
+
+
+

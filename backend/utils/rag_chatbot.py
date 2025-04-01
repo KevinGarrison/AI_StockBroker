@@ -1,9 +1,9 @@
 from langchain_core.documents import Document
 from langchain_qdrant import QdrantVectorStore
-from qdrant_client.async_qdrant_client import AsyncQdrantClient
 #from qdrant_client.models import Filter, FieldCondition, MatchValue / Mabey use in advance
 from qdrant_client.http.models import VectorParams, Distance
-from langchain.text_splitter import MarkdownTextSplitter
+from langchain.text_splitter import MarkdownTextSplitter, TokenTextSplitter
+from qdrant_client import QdrantClient
 from langchain_openai import OpenAIEmbeddings
 from dataclasses import dataclass
 import json
@@ -12,6 +12,19 @@ import os
 from dotenv import load_dotenv
 from uuid import uuid4
 import httpx
+from bs4 import XMLParsedAsHTMLWarning
+import logging
+import warnings
+import pandas as pd
+import redis
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 load_dotenv()
 
@@ -19,117 +32,142 @@ load_dotenv()
 @dataclass
 class RAG_Chatbot:
     
-    # Connect to qdrant client
-    async def connect_to_qdrant(self, host:str=None, port:str=None)->AsyncQdrantClient:
+    def connect_to_qdrant(self, host: str = None, port: str = None) -> QdrantClient:
         try:
-            host = str(host) or os.getenv('QDRANT_HOST')
-            port = str(port) or int(os.getenv('QDRANT_PORT'))
-            client = AsyncQdrantClient(host=host, port=port)
+            host = str(host or os.getenv('QDRANT_HOST'))
+            port = int(port or os.getenv('QDRANT_PORT'))
+            client = QdrantClient(host=host, port=port)
+            logging.info(f"[Qdrant] Connected to {host}:{port}")
             return client
         except Exception as e:
-            print(f"Error while connecting to Qdrant: {e}")
+            logging.error(f"[Qdrant ERROR] Connection failed: {e}")
+            raise
         
-    async def delete_session_stored_docs(self, client:AsyncQdrantClient=None,
-                                            collection_name:str=None,
-                                            ):
+    def connect_to_redis(self, host: str = None, port: int = None, db: int = 0, password: str = None) -> redis.Redis:
         try:
-            collection_name = str(collection_name) or os.getenv('COLLECTION_NAME')
-            await client.delete_collection(collection_name=os.environ.get('COLLECTION_NAME'))
-            print(f'Collection {collection_name} deleted')
+            host = host or os.getenv('REDIS_HOST', 'localhost')
+            port = int(port or os.getenv('REDIS_PORT', 6379))
+            password = password or os.getenv('REDIS_PASSWORD', None)
+
+            client = redis.Redis(host=host, port=port, db=db)
+            client.ping()  # Verbindungsprüfung
+            logging.info(f"[Redis] Connected to {host}:{port} (db={db})")
+            return client
         except Exception as e:
-            print(f"Error {e} while deleting collection {collection_name}")
-            
+            logging.error(f"[Redis ERROR] Connection failed: {e}")
+            raise
 
-    async def process_text_to_qdrant(self, context_docs:str=None,
-                            collection_name:str=None,
-                            metadata:dict=None,
-                            chunk_size:int=None,
-                            chunk_overlap:int=None,
-                            client:AsyncQdrantClient=None,
-                            host:str=None,
-                            port:str=None)->str:
-        """
-        Splits text into chunks and stores them in Qdrant vector DB.
-        """
+    def delete_session_stored_docs(self, client: QdrantClient, collection_name: str = None):
         try:
-            client = client
-            host = str(host) or os.getenv('QDRANT_HOST')
-            port = int(port) or int(os.getenv('QDRANT_PORT'))
-            collection_name = str(collection_name) or os.getenv('COLLECTION_NAME')
-            url = f"http://{host}:{port}"
+            collection_name = collection_name or os.getenv('COLLECTION_NAME')
+            client.delete_collection(collection_name=collection_name)
+            logging.info(f"[Qdrant] Deleted collection '{collection_name}'")
+        except Exception as e:
+            logging.error(f"[Qdrant ERROR] Couldn't delete collection: {e}")
+
+    def process_text_to_qdrant(self, context_docs: pd.DataFrame, client: QdrantClient, redis: redis.Redis) -> QdrantVectorStore:
+        try:
             
-            chunk_size = int(chunk_size or os.getenv('CHUNK_SIZE', 500))
-            chunk_overlap = int(chunk_overlap or os.getenv('OVERLAP_SIZE', 50))
-            metadata = metadata or {}
-            
-            splitter = MarkdownTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-            chunks = splitter.split_text(str(context_docs))
-            documents = [Document(metadata=metadata, page_content=chunk) for chunk in chunks]
-            uuids = [str(uuid4()) for _ in range(len(documents))]
-            
-            openai_key = os.getenv("OPENAI_API_KEY")
-            if not openai_key:
-                raise EnvironmentError("OPENAI_API_KEY not set in environment.")
+            collection_name = os.getenv('COLLECTION_NAME')
+            chunk_size = int(os.getenv('CHUNK_SIZE', 3500))  # now in tokens
+            chunk_overlap = int(os.getenv('OVERLAP_SIZE', 200))
 
-            embeddings = OpenAIEmbeddings(model=os.getenv('EMBEDDING_MODEL_OPENAI'))
+            markdown_splitter = MarkdownTextSplitter(chunk_size=10000, chunk_overlap=0)
+            token_splitter = TokenTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
+            documents = []
 
-            existing_collections = [c.name for c in await client.get_collections().collections]
+            for _, row in context_docs.iterrows():
+                content = row.get("content")
+                cik = row.get("cik")
+                acc = row.get("accession_number")
+                file = row.get("docs")
+                form = row.get("form")
+                if not content:
+                    continue
+                
+                cached_docs = {
+                    "content":content,
+                    "cik":cik,
+                    "accession":acc,
+                    "form":form,
+                    "filename":file
+                }
+                
+                redis.hset(name=f"{cik}",key=f"{acc}/{file}", mapping=cached_docs)
+                
+                metadata = {k: v for k, v in row.items() if k != "content"}
 
-            if collection_name not in existing_collections:
-                print('No collection found. Creating one...')
-                vector_size = int(os.getenv('VECTOR_SIZE', 3072)) 
+                # Step 1: Markdown structure chunks
+                markdown_chunks = markdown_splitter.split_text(str(content))
+
+                # Step 2: Token-limited chunks per markdown section
+                for md_chunk in markdown_chunks:
+                    token_chunks = token_splitter.split_text(md_chunk)
+                    for chunk in token_chunks:
+                        documents.append(Document(page_content=chunk, metadata=metadata))
+
+            uuids = [str(uuid4()) for _ in documents]
+
+            embeddings = OpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL_OPENAI"))
+
+            existing = client.get_collections().collections
+            existing_names = [c.name for c in existing]
+
+            if collection_name not in existing_names:
+                vector_size = int(os.getenv("VECTOR_SIZE", 3072))
                 client.create_collection(
                     collection_name=collection_name,
                     vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE)
                 )
+                logging.info(f"[Qdrant] Created collection '{collection_name}'")
 
-            
             vector_store = QdrantVectorStore.from_existing_collection(
-                client=client,
+                host=os.getenv("QDRANT_HOST"),
+                port=int(os.getenv("QDRANT_PORT")),
                 embedding=embeddings,
-                collection_name=collection_name,
-                url=url,
+                collection_name=collection_name
             )
 
+
+            if not documents:
+                logging.warning("[Qdrant] No documents to add — skipping.")
+                return None
+
             vector_store.add_documents(documents=documents, ids=uuids)
-            return f"Collection {collection_name} created and {len(documents)} stored!"
+            logging.info(f"[Qdrant] Stored {len(documents)} document chunks in '{collection_name}'")
+            return vector_store
+
         except Exception as e:
-            return f"Data processing failed: {e}"
+            logging.error(f"[Qdrant ERROR] {e}")
+            raise
 
-
-    async def query_qdrant(self, prompt:str=None,
-                    collection_name:str=None,
-                    client:AsyncQdrantClient=None,
-                    host:str=None,
-                    port:str=None)->list[Document]:
+    def query_qdrant(self, prompt: str, client: QdrantClient, collection_name: str = None) -> list[Document]:
         try:
-            client = client
-            host = str(host) or os.getenv('QDRANT_HOST')
-            port = int(port) or int(os.getenv('QDRANT_PORT'))
-            collection_name = str(collection_name) or os.getenv('COLLECTION_NAME')
-            url = f"http://{host}:{port}"
-            
-            embeddings = OpenAIEmbeddings(model=os.getenv('EMBEDDING_MODEL_OPENAI'))
+            collection_name = collection_name or os.getenv('COLLECTION_NAME')
+            embeddings = OpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL_OPENAI"))
 
-            existing_collections = [c.name for c in await client.get_collections().collections]
-            
-            if collection_name in existing_collections:
-                vector_store= QdrantVectorStore.from_existing_collection(
-                    client=client,
-                    embedding=embeddings,
-                    collection_name=collection_name,
-                    url=url
-                )
-                
-                results = vector_store.similarity_search(
-                    prompt, k=2
-                )
-            else:
-                print(f"No collection '{collection_name}' found!")
-            return results
+            existing = client.get_collections().collections
+            existing_names = [c.name for c in existing]
+
+            if collection_name not in existing_names:
+                logging.warning(f"[Qdrant] No collection '{collection_name}' found")
+                return []
+
+            vector_store = QdrantVectorStore.from_existing_collection(
+                host=os.getenv("QDRANT_HOST"),
+                port=int(os.getenv("QDRANT_PORT")),
+                embedding=embeddings,
+                collection_name=collection_name
+            )
+
+
+            return vector_store.similarity_search(prompt, k=2)
+
         except Exception as e:
-            return f"Error during Qdrant query: {e}"
+            logging.error(f"[Qdrant ERROR] {e}")
+            return []
+
 
 
     async def gpt4o_mini(self, company_facts:str=None, context_y_finance:str=None, context_sec:str=None)->str:
@@ -240,8 +278,8 @@ class RAG_Chatbot:
                 ],
                 'stream': False
             }
-
-            async with httpx.AsyncClient() as client:
+            logging.debug(json.dumps(data, indent=2))
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
                     "https://api.deepseek.com/chat/completions",
                     headers=HEADERS,
