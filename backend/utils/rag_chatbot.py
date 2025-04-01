@@ -76,27 +76,33 @@ class RAG_Chatbot:
             token_splitter = TokenTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
             documents = []
-
-            for _, row in context_docs.iterrows():
+            
+            for index, row in context_docs.iterrows():
+                raw_content = row.get("raw_content")
                 content = row.get("content")
                 cik = row.get("cik")
                 acc = row.get("accession_number")
                 file = row.get("docs")
                 form = row.get("form")
-                if not content:
-                    continue
                 
                 cached_docs = {
-                    "content":content,
-                    "cik":cik,
-                    "accession":acc,
-                    "form":form,
-                    "filename":file
+                    "raw_content":raw_content.decode("utf-8") if isinstance(raw_content, bytes) else str(raw_content),
+                    "cik":f"{cik}",
+                    "accession":f"{acc}",
+                    "form":f"{form}",
+                    "filename":f"{file}"
                 }
-                
-                redis.hset(name=f"{cik}",key=f"{acc}/{file}", mapping=cached_docs)
-                
-                metadata = {k: v for k, v in row.items() if k != "content"}
+
+                if raw_content is not None and cik is not None and acc is not None and form is not None and file is not None:
+                    redis_key = f"{str(acc)}/{str(file)}"
+                    redis.hset(
+                        name=redis_key,
+                        mapping=cached_docs
+                    )
+                    logging.info(f"[REDIS] Stored document: {file} with key: {redis_key} in db=0")
+                else:
+                    logging.warning(f"[REDIS] Skipping Redis write due to None value - accession: {acc}, file: {file}")
+                metadata = {k: v for k, v in row.items() if k != "content" and k != "raw_content"}
 
                 # Step 1: Markdown structure chunks
                 markdown_chunks = markdown_splitter.split_text(str(content))
@@ -228,7 +234,7 @@ class RAG_Chatbot:
             return f"Unexpected error: {e}"        
 
 
-    async def deepseek_r1(self, company_facts:str=None, context_y_finance:str=None, context_sec:str=None)->str:
+    async def deepseek_r1_broker_analysis(self, company_facts:str=None, context_y_finance:str=None, context_sec:str=None)->str:
         try:
             HEADERS = {
                 'Authorization': f"Bearer {os.environ.get('DEEPSEEK_API_KEY')}",

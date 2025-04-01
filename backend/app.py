@@ -8,9 +8,10 @@ from bs4 import XMLParsedAsHTMLWarning
 import logging
 import warnings
 import time
-import redis
 import asyncio
+from pathlib import Path
 from dotenv import load_dotenv
+import os
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,6 +21,39 @@ logging.basicConfig(
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 load_dotenv()
+
+css = """
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+    }
+    table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-bottom: 30px;
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        vertical-align: top;
+    }
+    tr:nth-child(even) {
+        background-color: #f9f9f9;
+    }
+    th {
+        background-color: #f2f2f2;
+        text-align: left;
+    }
+    h1, h2, h3 {
+        margin-top: 30px;
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 5px;
+    }
+</style>
+"""
+
+
 app = FastAPI()
 
 redis_db = {}
@@ -110,6 +144,7 @@ async def pull_and_analyze(ticker: str = None):
     docs_content_series_1 = await fetcher.preprocess_docs_content(series=docs_content_series)
     logging.info(f"[{ticker}] Step 6 - Preprocess SEC documents - {time.time() - task_6:.2f}s")
     temp_df = all_data['base_sec_df'].copy()
+    temp_df['raw_content'] = docs_content_series
     temp_df['content'] = docs_content_series_1
     all_data['final_sec_df'] = temp_df
     
@@ -137,7 +172,7 @@ async def pull_and_analyze(ticker: str = None):
     context_yf = str(all_data['yf_stock_data'])
     company_facts = str(all_data['sec_details_1'])
     task_9 = time.time() 
-    final_broker_analysis = await rag_bot.deepseek_r1(company_facts=company_facts,
+    final_broker_analysis = await rag_bot.deepseek_r1_broker_analysis(company_facts=company_facts,
                                                 context_y_finance=context_yf,
                                                 context_sec=str(sec_result_formatted))
     logging.info(f"[{ticker}] Step 9 - Final AI Broker Analysis - {time.time() - task_9:.2f}s")
@@ -169,18 +204,28 @@ async def get_reference_files(accession: str, filename: str):
     try:
         redis = redis_db["client"]
         key = f"{accession}/{filename}"
-        doc_data = await redis.hgetall(key)
+        doc_data = await asyncio.to_thread(redis.hgetall, key)
 
         if not doc_data:
             raise HTTPException(status_code=404, detail="Document not found in Redis.")
 
-        return {
-            "accession": doc_data.get("accession"),
-            "cik": doc_data.get("cik"),
-            "form": doc_data.get("form"),
-            "filename": doc_data.get("filename"),
-            "content": doc_data.get("content", "") 
-        }
+        decoded_doc_data = {k.decode(): v.decode() for k, v in doc_data.items()}
+        
+        html_content = decoded_doc_data.get("raw_content")
+
+        form = decoded_doc_data.get("form")
+        file_name = decoded_doc_data.get("filename")
+        
+        
+        temp_dir = Path("temp_sec_files")
+        temp_dir.mkdir(exist_ok=True)
+
+        # Save the HTML
+        output_path = temp_dir / f"{form}_{file_name}"
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        
+        return decoded_doc_data
 
     except Exception as e:
         logging.error(f"[REDIS ERROR] Failed to fetch {accession}/{filename} - {e}")
