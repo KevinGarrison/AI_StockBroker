@@ -18,12 +18,7 @@ import warnings
 import pandas as pd
 import redis
 
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
-
+logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 load_dotenv()
@@ -37,33 +32,35 @@ class RAG_Chatbot:
             host = str(host or os.getenv('QDRANT_HOST'))
             port = int(port or os.getenv('QDRANT_PORT'))
             client = QdrantClient(host=host, port=port)
-            logging.info(f"[Qdrant] Connected to {host}:{port}")
+            logger.info(f"[Qdrant] Connected to {host}:{port}")
             return client
         except Exception as e:
-            logging.error(f"[Qdrant ERROR] Connection failed: {e}")
+            logger.error(f"[Qdrant ERROR] Connection failed: {e}")
             raise
-        
+
+
     def connect_to_redis(self, host: str = None, port: int = None, db: int = 0, password: str = None) -> redis.Redis:
         try:
-            host = host or os.getenv('REDIS_HOST', 'localhost')
+            host = host or os.getenv('REDIS_HOST', 'redis')
             port = int(port or os.getenv('REDIS_PORT', 6379))
-            password = password or os.getenv('REDIS_PASSWORD', None)
 
             client = redis.Redis(host=host, port=port, db=db)
-            client.ping()  # Verbindungsprüfung
-            logging.info(f"[Redis] Connected to {host}:{port} (db={db})")
+            client.ping() 
+            logger.info(f"[Redis] Connected to {host}:{port} (db={db})")
             return client
         except Exception as e:
-            logging.error(f"[Redis ERROR] Connection failed: {e}")
+            logger.error(f"[Redis ERROR] Connection failed: {e}")
             raise
+
 
     def delete_session_stored_docs(self, client: QdrantClient, collection_name: str = None):
         try:
             collection_name = collection_name or os.getenv('COLLECTION_NAME')
             client.delete_collection(collection_name=collection_name)
-            logging.info(f"[Qdrant] Deleted collection '{collection_name}'")
+            logger.info(f"[Qdrant] Deleted collection '{collection_name}'")
         except Exception as e:
-            logging.error(f"[Qdrant ERROR] Couldn't delete collection: {e}")
+            logger.error(f"[Qdrant ERROR] Couldn't delete collection: {e}")
+
 
     def process_text_to_qdrant(self, context_docs: pd.DataFrame, client: QdrantClient, redis: redis.Redis) -> QdrantVectorStore:
         try:
@@ -99,9 +96,9 @@ class RAG_Chatbot:
                         name=redis_key,
                         mapping=cached_docs
                     )
-                    logging.info(f"[REDIS] Stored document: {file} with key: {redis_key} in db=0")
+                    logger.info(f"[REDIS] Stored document: {file} with key: {redis_key} in db=0")
                 else:
-                    logging.warning(f"[REDIS] Skipping Redis write due to None value - accession: {acc}, file: {file}")
+                    logger.warning(f"[REDIS] Skipping Redis write due to None value - accession: {acc}, file: {file}")
                 metadata = {k: v for k, v in row.items() if k != "content" and k != "raw_content"}
 
                 # Step 1: Markdown structure chunks
@@ -126,7 +123,7 @@ class RAG_Chatbot:
                     collection_name=collection_name,
                     vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE)
                 )
-                logging.info(f"[Qdrant] Created collection '{collection_name}'")
+                logger.info(f"[Qdrant] Created collection '{collection_name}'")
 
             vector_store = QdrantVectorStore.from_existing_collection(
                 host=os.getenv("QDRANT_HOST"),
@@ -137,16 +134,17 @@ class RAG_Chatbot:
 
 
             if not documents:
-                logging.warning("[Qdrant] No documents to add — skipping.")
+                logger.warning("[Qdrant] No documents to add — skipping.")
                 return None
 
             vector_store.add_documents(documents=documents, ids=uuids)
-            logging.info(f"[Qdrant] Stored {len(documents)} document chunks in '{collection_name}'")
+            logger.info(f"[Qdrant] Stored {len(documents)} document chunks in '{collection_name}'")
             return vector_store
 
         except Exception as e:
-            logging.error(f"[Qdrant ERROR] {e}")
+            logger.error(f"[Qdrant ERROR] {e}")
             raise
+
 
     def query_qdrant(self, prompt: str, client: QdrantClient, collection_name: str = None) -> list[Document]:
         try:
@@ -157,7 +155,7 @@ class RAG_Chatbot:
             existing_names = [c.name for c in existing]
 
             if collection_name not in existing_names:
-                logging.warning(f"[Qdrant] No collection '{collection_name}' found")
+                logger.warning(f"[Qdrant] No collection '{collection_name}' found")
                 return []
 
             vector_store = QdrantVectorStore.from_existing_collection(
@@ -171,9 +169,8 @@ class RAG_Chatbot:
             return vector_store.similarity_search(prompt, k=2)
 
         except Exception as e:
-            logging.error(f"[Qdrant ERROR] {e}")
+            logger.error(f"[Qdrant ERROR] {e}")
             return []
-
 
 
     async def gpt4o_mini(self, company_facts:str=None, context_y_finance:str=None, context_sec:str=None)->str:
@@ -284,7 +281,7 @@ class RAG_Chatbot:
                 ],
                 'stream': False
             }
-            logging.debug(json.dumps(data, indent=2))
+            logger.debug(json.dumps(data, indent=2))
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
                     "https://api.deepseek.com/chat/completions",
