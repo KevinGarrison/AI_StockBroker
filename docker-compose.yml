@@ -59,14 +59,14 @@ services:
       - qdrant
     restart: always
 
-  frontend:
-    build: ./frontend
-    container_name: tbd-frontend
-    expose:
-      - "4000"
-    depends_on:
-      - backend
-    restart: always
+  # frontend:
+  #   build: ./frontend
+  #   container_name: tbd-frontend
+  #   expose:
+  #     - "4000"
+  #   depends_on:
+  #     - backend
+  #   restart: always
 
   nginx:
     image: nginx:latest
@@ -77,7 +77,7 @@ services:
       - ./nginx:/etc/nginx:ro
     depends_on:
       - backend
-      - frontend
+      #- frontend
     restart: always
 
 volumes:

@@ -134,32 +134,7 @@
           },
           "unit": "currencyUSD"
         },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "close_price AAL"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 11,
@@ -207,16 +182,16 @@
         "allowCustomValue": false,
         "current": {
           "text": [
-            "AACB",
-            "AAL"
+            "AACG",
+            "AACBU"
           ],
           "value": [
-            "AACB",
-            "AAL"
+            "AACG",
+            "AACBU"
           ]
         },
         "definition": "from(bucket: \"25s-cd-teamb\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"stock_prices\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"close_price\")\r\n  |> group(columns: [\"ticker\"])\r\n  |> distinct(column: \"ticker\")",
-        "includeAll": true,
+        "includeAll": false,
         "multi": true,
         "name": "ticker",
         "options": [],
@@ -275,5 +250,5 @@
   "timezone": "browser",
   "title": "CDC Project",
   "uid": "behe0zf9xwzcwf",
-  "version": 35
+  "version": 37
 }
