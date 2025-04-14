@@ -17,6 +17,8 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
+logger = logging.getLogger(__name__)
+
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 load_dotenv()
@@ -56,7 +58,7 @@ async def read_root():
     available_companies = await fetcher.get_available_company_data()
     return available_companies.to_json(orient="records")
 
-@app.get("/history-timeseries-stock/{ticker}")
+@app.get("/stock-history/{ticker}")
 async def stock_history_of_selected_ticker(ticker:str=None):
     data = await fetcher.fetch_selected_stock_data_yf(selected_ticker=ticker)
     history_timeseries = {str(key): value for key, value in data['price_history'].items()}
@@ -70,7 +72,7 @@ async def pull_and_analyze(ticker: str = None):
     # Step 1: Validate & find ticker
     task_1 = time.time()
     all_companies_df = await fetcher.get_available_company_data()
-    logging.info(f"[{ticker}] Step 1 - Fetched company data ({len(all_companies_df)} rows) - {time.time() - task_1:.2f}s")
+    logger.info(f"[{ticker}] Step 1 - Fetched company data ({len(all_companies_df)} rows) - {time.time() - task_1:.2f}s")
     datapoint = all_companies_df[all_companies_df['ticker'] == ticker]
 
     if datapoint.empty:
@@ -84,20 +86,20 @@ async def pull_and_analyze(ticker: str = None):
     # Step 2: Yahoo Finance Data
     task_2 = time.time()
     all_data['yf_stock_data'] = await fetcher.fetch_selected_stock_data_yf(selected_ticker=ticker)
-    logging.info(f"[{ticker}] Step 2 - Fetched Yahoo Finance data - {time.time() - task_2:.2f}s")
+    logger.info(f"[{ticker}] Step 2 - Fetched Yahoo Finance data - {time.time() - task_2:.2f}s")
 
     # Step 3: SEC Data
     task_3 = time.time()
     details_1, details_2, filing_accessions = await fetcher.fetch_selected_company_details_and_filing_accessions(
         selected_cik=all_data['cik']
     )
-    logging.info(f"[{ticker}] Step 3 - Fetched SEC filings - {time.time() - task_3:.2f}s")
+    logger.info(f"[{ticker}] Step 3 - Fetched SEC filings - {time.time() - task_3:.2f}s")
     all_data['sec_details_1'] = details_1
     all_data['sec_details_2'] = details_2
     all_data['filing_accessions'] = filing_accessions
     task_4 = time.time()
     all_data['mapping_latest_docs'] = fetcher.get_latest_filings_index(filings=all_data['filing_accessions'])
-    logging.info(f"[{ticker}] Step 4 - Get SEC documents index- {time.time() - task_4:.2f}s")
+    logger.info(f"[{ticker}] Step 4 - Get SEC documents index- {time.time() - task_4:.2f}s")
 
     all_data['base_sec_df'] = fetcher.create_base_df_for_sec_company_data(mapping_latest_docs=all_data['mapping_latest_docs'],
                                                                         filings=all_data['filing_accessions'],
@@ -105,10 +107,10 @@ async def pull_and_analyze(ticker: str = None):
     
     task_5 = time.time()
     docs_content_series = await fetcher.fetch_all_filings(base_sec_df=all_data['base_sec_df'])
-    logging.info(f"[{ticker}] Step 5 - Fetch SEC documents - {time.time() - task_5:.2f}s")
+    logger.info(f"[{ticker}] Step 5 - Fetch SEC documents - {time.time() - task_5:.2f}s")
     task_6 = time.time()
     docs_content_series_1 = await fetcher.preprocess_docs_content(series=docs_content_series)
-    logging.info(f"[{ticker}] Step 6 - Preprocess SEC documents - {time.time() - task_6:.2f}s")
+    logger.info(f"[{ticker}] Step 6 - Preprocess SEC documents - {time.time() - task_6:.2f}s")
     temp_df = all_data['base_sec_df'].copy()
     temp_df['raw_content'] = docs_content_series
     temp_df['content'] = docs_content_series_1
@@ -121,12 +123,12 @@ async def pull_and_analyze(ticker: str = None):
         client=vector_db["client"],
         redis=redis_db["client"]
     )
-    logging.info(f"[{ticker}] Step 7 - Store SEC documents in vector db - {time.time() - task_7:.2f}s")
+    logger.info(f"[{ticker}] Step 7 - Store SEC documents in vector db - {time.time() - task_7:.2f}s")
 
     query = 'what is the biggest risc according to the sec filings in 2024?'
     task_8 = time.time()
     result = vector_store.similarity_search(query=query, k=1)
-    logging.info(f"[{ticker}] Step 8 - Find most related SEC documents - {time.time() - task_8:.2f}s")
+    logger.info(f"[{ticker}] Step 8 - Find most related SEC documents - {time.time() - task_8:.2f}s")
     sec_result_formatted = [
         {
             "content": doc.page_content,
@@ -141,11 +143,11 @@ async def pull_and_analyze(ticker: str = None):
     final_broker_analysis = await rag_bot.deepseek_r1_broker_analysis(company_facts=company_facts,
                                                 context_y_finance=context_yf,
                                                 context_sec=str(sec_result_formatted))
-    logging.info(f"[{ticker}] Step 9 - Final AI Broker Analysis - {time.time() - task_9:.2f}s")
+    logger.info(f"[{ticker}] Step 9 - Final AI Broker Analysis - {time.time() - task_9:.2f}s")
     end_time = time.time()
     elapsed = end_time - start_time
     
-    logging.info(f"[{ticker}] Task completed in {elapsed:.2f} seconds")
+    logger.info(f"[{ticker}] Task completed in {elapsed:.2f} seconds")
     
     result_json = {
         "broker_analysis": final_broker_analysis,
@@ -194,5 +196,5 @@ async def get_reference_files(accession: str, filename: str):
         return decoded_doc_data
 
     except Exception as e:
-        logging.error(f"[REDIS ERROR] Failed to fetch {accession}/{filename} - {e}")
+        logger.error(f"[REDIS ERROR] Failed to fetch {accession}/{filename} - {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve document from Redis.")

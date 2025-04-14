@@ -16,10 +16,8 @@ from bs4 import XMLParsedAsHTMLWarning
 import logging
 import warnings
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
+
+logger = logging.getLogger(__name__)
 
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
@@ -40,21 +38,28 @@ class API_Fetcher:
     async def fetch_company_cik_ticker_title(self)->pd.DataFrame:
         try:
             headers = {'User-Agent': os.environ.get('USER_AGENT_SEC')}
-            
+            logger.info(f"Using headers for SEC request: {headers}")
             async with httpx.AsyncClient() as client:
                 company_tickers = await client.get(
                     "https://www.sec.gov/files/company_tickers.json",
                     headers=headers
                 )
+                logger.info(f"SEC response status code: {company_tickers.status_code}")
+                logger.info(f"Response headers: {company_tickers.headers}")
+                
+                if company_tickers.status_code != 200:
+                    logger.warning(f"Unexpected status from SEC: {company_tickers.status_code}")
+                    logger.debug(f"Response content: {company_tickers.text[:300]}")
+                    
                 company_tickers.raise_for_status()
                 company_data = pd.DataFrame(company_tickers.json()).T
                 return company_data
         except httpx.HTTPStatusError as e:
-            print(f"HTTP error while fetching SEC data: {e}")
+            logger.error(f"HTTP error while fetching SEC data: {e}")
         except httpx.RequestError as e:
-            print(f"Request error: {e}")
+            logger.error(f"Request error: {e}")
         except Exception as e:
-            print(f"Failed 'fetch_company_cik_ticker_title': {e}")    
+            logger.exception(f"Failed 'fetch_company_cik_ticker_title': {e}")    
     
     
     async def get_available_company_data(self)->tuple[list, pd.DataFrame]:
@@ -291,70 +296,71 @@ class API_Fetcher:
                 return
             except Exception as e:
                 print(f'[docling] Failed at row {index}: {e}')
+                return
 
-            try:
-                decoded = raw_content.decode("utf-8", errors="ignore")
-                preprocessed = self.preclean_for_llm(decoded)
+#             try:
+#                 decoded = raw_content.decode("utf-8", errors="ignore")
+#                 preprocessed = self.preclean_for_llm(decoded)
 
-                prompt = f"""
-Extract the **main readable content** from the following HTML or XML-like text, preserving logical document structure.
+#                 prompt = f"""
+# Extract the **main readable content** from the following HTML or XML-like text, preserving logical document structure.
 
----
+# ---
 
-### Instructions:
+# ### Instructions:
 
-1. **Ignore or summarize metadata** (e.g., headers, schema info, context tags like `<ix:header>`, `<context>`).
-2. **Preserve structure** using Markdown:
-    - Use `#`, `##`, `###` for titles and section headings.
-    - Convert bullet and numbered lists cleanly.
-    - Format any tables as **Markdown tables** with clear headers.
-3. **Clean up the text**:
-    - Replace escape characters (`\\n`, `\\t`, `\\r`) with real line breaks or tabs.
-    - Decode HTML/XML entities (e.g., `&nbsp;`, `&amp;`).
-    - Normalize spacing and remove redundant blank lines.
-4. **Respond only with the extracted content.**
----
+# 1. **Ignore or summarize metadata** (e.g., headers, schema info, context tags like `<ix:header>`, `<context>`).
+# 2. **Preserve structure** using Markdown:
+#     - Use `#`, `##`, `###` for titles and section headings.
+#     - Convert bullet and numbered lists cleanly.
+#     - Format any tables as **Markdown tables** with clear headers.
+# 3. **Clean up the text**:
+#     - Replace escape characters (`\\n`, `\\t`, `\\r`) with real line breaks or tabs.
+#     - Decode HTML/XML entities (e.g., `&nbsp;`, `&amp;`).
+#     - Normalize spacing and remove redundant blank lines.
+# 4. **Respond only with the extracted content.**
+# ---
 
-### Output Format:
-**Report Type (If given)**: 
-**Cleaned Content**
+# ### Output Format:
+# **Report Type (If given)**: 
+# **Cleaned Content**
 
----
+# ---
 
-Raw content:
-{preprocessed[:200000]}
-"""
+# Raw content:
+# {preprocessed[:200000]}
+# """
 
 
-                headers = {
-                    'Authorization': f"Bearer {os.environ.get('DEEPSEEK_API_KEY')}",
-                    'Content-Type': 'application/json',
-                }
+#                 headers = {
+#                     'Authorization': f"Bearer {os.environ.get('DEEPSEEK_API_KEY')}",
+#                     'Content-Type': 'application/json',
+#                 }
 
-                data = {
-                    'model': 'deepseek-chat',
-                    'messages': [{'role': 'user', 'content': prompt}],
-                    'stream': False
-                }
+#                 data = {
+#                     'model': 'deepseek-chat',
+#                     'messages': [{'role': 'user', 'content': prompt}],
+#                     'stream': False
+#                 }
 
-                async with httpx.AsyncClient(timeout=60.0) as client:
-                    response = await client.post(
-                        "https://api.deepseek.com/chat/completions",
-                        headers=headers,
-                        data=json.dumps(data)
-                    )
-                    response.raise_for_status()
-                    result = response.json()
-                    markdown = result['choices'][0]['message']['content']
-                    cleaned_series.at[index] = markdown
-                    print(f'[deepseek] Parsed row {index}')
+#                 async with httpx.AsyncClient(timeout=60.0) as client:
+#                     response = await client.post(
+#                         "https://api.deepseek.com/chat/completions",
+#                         headers=headers,
+#                         data=json.dumps(data)
+#                     )
+#                     response.raise_for_status()
+#                     result = response.json()
+#                     markdown = result['choices'][0]['message']['content']
+#                     cleaned_series.at[index] = markdown
+#                     print(f'[deepseek] Parsed row {index}')
 
-            except httpx.RequestError as e:
-                print(f"[deepseek] Request error at row {index}: {e}")
-                cleaned_series.at[index] = None
-            except Exception as e:
-                print(f"[deepseek] Unexpected error at row {index}: {e}")
-                cleaned_series.at[index] = None
+#             except httpx.RequestError as e:
+#                 print(f"[deepseek] Request error at row {index}: {e}")
+#                 cleaned_series.at[index] = None
+#             except Exception as e:
+#                 print(f"[deepseek] Unexpected error at row {index}: {e}")
+#                 cleaned_series.at[index] = None
 
         tasks = [process_row(index) for index in series.index]
         await asyncio.gather(*tasks)

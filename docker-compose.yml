@@ -40,6 +40,14 @@ services:
       - qdrant-data:/qdrant/storage
     restart: always
 
+  redis:
+    image: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - /docker/host/dir:/data
+    restart: always
+
   backend:
     build: ./backend
     container_name: fastapi-backend
@@ -77,3 +85,4 @@ volumes:
   influxdb-data:
   grafana-data:
   qdrant-data:
+  redis-data:
