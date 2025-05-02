@@ -37,6 +37,17 @@ async def forecast_stock(ticker: str) -> dict:
     df['dividend_yield'] = data['dividend_yield']
     df['debt_to_equity'] = data['debt_to_equity']
 
+    feature_columns = [
+        'recommendation', 'eps_forward', 'revenue_growth', 
+        'recommendation_mean', 'gross_margins', 
+        'dividend_yield', 'debt_to_equity'
+    ]
+
+    # Fill NaN values in feature columns with 0.0 
+    for col in feature_columns:
+        if col in df.columns:
+            df[col] = df[col].fillna(0.0) 
+
     # Modell
     model = RNN(h=5, input_size=12, max_steps=100)
     nf = NeuralForecast(models=[model], freq='M')
