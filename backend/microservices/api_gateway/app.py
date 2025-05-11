@@ -39,6 +39,6 @@ async def stock_broker_analysis(ticker: str = None):
 @app.get("/reference-doc/{accession}/{filename}")
 async def get_reference_files(accession: str, filename: str):
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"/reference-doc-from-analysis/{accession}/{filename}")      
+        response = await client.get(f"http://localhost:8002/reference-doc-from-analysis/{accession}/{filename}")      
         return response.json()
     

@@ -157,7 +157,7 @@ class RAG_Chatbot:
         except Exception as e:
             logger.error(f"[Qdrant ERROR] {e}")
             return []
-
+    
 
     async def gpt4o_mini(self, company_facts:str=None, context_y_finance:str=None, context_sec:str=None)->str:
         try:
