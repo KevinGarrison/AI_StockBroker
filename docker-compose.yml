@@ -1,33 +1,33 @@
 services:
-  # influxdb:
-  #   image: influxdb:latest
-  #   container_name: influxdb
-  #   ports:
-  #     - "8086:8086"
-  #   volumes:
-  #     - influxdb-data:/var/lib/influxdb
-  #   environment:
-  #     - DOCKER_INFLUXDB_INIT_MODE=setup
-  #     - DOCKER_INFLUXDB_INIT_USERNAME=admin
-  #     - DOCKER_INFLUXDB_INIT_PASSWORD=adminadmin
-  #     - DOCKER_INFLUXDB_INIT_ORG=HSAA
-  #     - DOCKER_INFLUXDB_INIT_BUCKET=25s-cd-teamb
-  #     - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mySuperSecretToken123!
-  #   restart: always
+  influxdb:
+    image: influxdb:latest
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=adminadmin
+      - DOCKER_INFLUXDB_INIT_ORG=HSAA
+      - DOCKER_INFLUXDB_INIT_BUCKET=25s-cd-teamb
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mySuperSecretToken123!
+    restart: always
 
-  # grafana:
-  #   image: grafana/grafana:latest
-  #   container_name: grafana
-  #   ports:
-  #     - "3000:3000"
-  #   volumes:
-  #     - grafana-data:/var/lib/grafana
-  #   environment:
-  #     - GF_SECURITY_ADMIN_USER=admin
-  #     - GF_SECURITY_ADMIN_PASSWORD=adminadmin
-  #   depends_on:
-  #     - influxdb
-  #   restart: always
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=adminadmin
+    depends_on:
+      - influxdb
+    restart: always
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -86,17 +86,17 @@ services:
   #     - backend
   #   restart: always
 
-  # nginx:
-  #   image: nginx:latest
-  #   container_name: nginx
-  #   ports:
-  #     - "80:80"
-  #   volumes:
-  #     - ./nginx:/etc/nginx:ro
-  #   depends_on:
-  #     - api_gateway
-  #     #- frontend
-  #   restart: always
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx:/etc/nginx:ro
+    depends_on:
+      - api_gateway
+      #- frontend
+    restart: always
 
 volumes:
   influxdb-data:
