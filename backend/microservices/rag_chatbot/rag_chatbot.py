@@ -1,6 +1,5 @@
 from langchain_core.documents import Document
 from langchain_qdrant import QdrantVectorStore
-#from qdrant_client.models import Filter, FieldCondition, MatchValue / Mabey use in advance
 from qdrant_client.http.models import VectorParams, Distance
 from langchain.text_splitter import MarkdownTextSplitter, TokenTextSplitter
 from qdrant_client import QdrantClient
@@ -41,7 +40,7 @@ class RAG_Chatbot:
 
     def connect_to_redis(self, host: str = None, port: int = None, db: int = 0, password: str = None) -> redis.Redis:
         try:
-            host = host or os.getenv('REDIS_HOST', 'redis')
+            host = host or os.getenv('REDIS_HOST')
             port = int(port or os.getenv('REDIS_PORT', 6379))
 
             client = redis.Redis(host=host, port=port, db=db)
@@ -53,16 +52,23 @@ class RAG_Chatbot:
             raise
 
 
-    def delete_session_stored_docs(self, client: QdrantClient, collection_name: str = None):
+    def delete_vec_docs(self, client: QdrantClient, collection_name: str = None):
         try:
             collection_name = collection_name or os.getenv('COLLECTION_NAME')
             client.delete_collection(collection_name=collection_name)
             logger.info(f"[Qdrant] Deleted collection '{collection_name}'")
         except Exception as e:
             logger.error(f"[Qdrant ERROR] Couldn't delete collection: {e}")
+    
+    def delete_cached_docs(self, client: redis.Redis):
+        try:
+            client.flushdb()
+            logger.info("[Redis] Deleted cache")
+        except Exception as e:
+            logger.error(f"[Redis ERROR] Couldn't delete collection: {e}")
 
 
-    def process_text_to_qdrant(self, context_docs: pd.DataFrame, client: QdrantClient, redis: redis.Redis) -> QdrantVectorStore:
+    def process_text_to_qdrant(self, context_docs: dict, client: QdrantClient, redis: redis.Redis) -> QdrantVectorStore:
         try:
             
             collection_name = os.getenv('COLLECTION_NAME')
@@ -145,29 +151,9 @@ class RAG_Chatbot:
             logger.error(f"[Qdrant ERROR] {e}")
             raise
 
-
-    def query_qdrant(self, prompt: str, client: QdrantClient, collection_name: str = None) -> list[Document]:
+    def query_qdrant(self, prompt: str, vector_store:QdrantVectorStore) -> Document:
         try:
-            collection_name = collection_name or os.getenv('COLLECTION_NAME')
-            embeddings = OpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL_OPENAI"))
-
-            existing = client.get_collections().collections
-            existing_names = [c.name for c in existing]
-
-            if collection_name not in existing_names:
-                logger.warning(f"[Qdrant] No collection '{collection_name}' found")
-                return []
-
-            vector_store = QdrantVectorStore.from_existing_collection(
-                host=os.getenv("QDRANT_HOST"),
-                port=int(os.getenv("QDRANT_PORT")),
-                embedding=embeddings,
-                collection_name=collection_name
-            )
-
-
-            return vector_store.similarity_search(prompt, k=2)
-
+            return vector_store.similarity_search(prompt, k=1)
         except Exception as e:
             logger.error(f"[Qdrant ERROR] {e}")
             return []
