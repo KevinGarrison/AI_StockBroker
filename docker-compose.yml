@@ -1,35 +1,33 @@
-version: '3.7'
-
 services:
-  influxdb:
-    image: influxdb:latest
-    container_name: influxdb
-    ports:
-      - "8086:8086"
-    volumes:
-      - influxdb-data:/var/lib/influxdb
-    environment:
-      - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=admin
-      - DOCKER_INFLUXDB_INIT_PASSWORD=adminadmin
-      - DOCKER_INFLUXDB_INIT_ORG=HSAA
-      - DOCKER_INFLUXDB_INIT_BUCKET=25s-cd-teamb
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mySuperSecretToken123!
-    restart: always
+  # influxdb:
+  #   image: influxdb:latest
+  #   container_name: influxdb
+  #   ports:
+  #     - "8086:8086"
+  #   volumes:
+  #     - influxdb-data:/var/lib/influxdb
+  #   environment:
+  #     - DOCKER_INFLUXDB_INIT_MODE=setup
+  #     - DOCKER_INFLUXDB_INIT_USERNAME=admin
+  #     - DOCKER_INFLUXDB_INIT_PASSWORD=adminadmin
+  #     - DOCKER_INFLUXDB_INIT_ORG=HSAA
+  #     - DOCKER_INFLUXDB_INIT_BUCKET=25s-cd-teamb
+  #     - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mySuperSecretToken123!
+  #   restart: always
 
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=adminadmin
-    depends_on:
-      - influxdb
-    restart: always
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: grafana
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - grafana-data:/var/lib/grafana
+  #   environment:
+  #     - GF_SECURITY_ADMIN_USER=admin
+  #     - GF_SECURITY_ADMIN_PASSWORD=adminadmin
+  #   depends_on:
+  #     - influxdb
+  #   restart: always
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -49,15 +47,35 @@ services:
       - /docker/host/dir:/data
     restart: always
 
-  backend:
-    build: ./backend
-    container_name: fastapi-backend
-    expose:
-      - "8000"
-    depends_on:
-      - influxdb
-      - qdrant
-    restart: always
+  # api_fetcher:
+  #   build: ./backend/microservices/api_fetcher
+  #   container_name: api-fetcher
+  #   expose:
+  #     - "8001"      
+  #   restart: always
+  
+  # rag_chatbot:
+  #   build: ./backend/microservices/rag_chatbot
+  #   container_name: rag-chatbot
+  #   expose:
+  #     - "8002"
+  #   depends_on:
+  #     - qdrant
+  #     - redis
+  #   restart: always
+
+  # api_gateway:
+  #   build: ./backend/microservices/api_gateway
+  #   container_name: api-gateway
+  #   expose:
+  #     - "8000"
+  #   depends_on:
+  #     - influxdb
+  #     - qdrant
+  #     - redis
+  #     - api_fetcher
+  #     - rag_chatbot
+  #   restart: always
 
   # frontend:
   #   build: ./frontend
@@ -68,17 +86,17 @@ services:
   #     - backend
   #   restart: always
 
-  nginx:
-    image: nginx:latest
-    container_name: nginx
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx:/etc/nginx:ro
-    depends_on:
-      - backend
-      #- frontend
-    restart: always
+  # nginx:
+  #   image: nginx:latest
+  #   container_name: nginx
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx:/etc/nginx:ro
+  #   depends_on:
+  #     - api_gateway
+  #     #- frontend
+  #   restart: always
 
 volumes:
   influxdb-data:

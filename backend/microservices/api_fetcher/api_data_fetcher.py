@@ -15,6 +15,7 @@ from bs4 import BeautifulSoup
 from bs4 import XMLParsedAsHTMLWarning
 import logging
 import warnings
+import time
 
 
 logger = logging.getLogger(__name__)
@@ -298,73 +299,64 @@ class API_Fetcher:
                 print(f'[docling] Failed at row {index}: {e}')
                 return
 
-#             try:
-#                 decoded = raw_content.decode("utf-8", errors="ignore")
-#                 preprocessed = self.preclean_for_llm(decoded)
-
-#                 prompt = f"""
-# Extract the **main readable content** from the following HTML or XML-like text, preserving logical document structure.
-
-# ---
-
-# ### Instructions:
-
-# 1. **Ignore or summarize metadata** (e.g., headers, schema info, context tags like `<ix:header>`, `<context>`).
-# 2. **Preserve structure** using Markdown:
-#     - Use `#`, `##`, `###` for titles and section headings.
-#     - Convert bullet and numbered lists cleanly.
-#     - Format any tables as **Markdown tables** with clear headers.
-# 3. **Clean up the text**:
-#     - Replace escape characters (`\\n`, `\\t`, `\\r`) with real line breaks or tabs.
-#     - Decode HTML/XML entities (e.g., `&nbsp;`, `&amp;`).
-#     - Normalize spacing and remove redundant blank lines.
-# 4. **Respond only with the extracted content.**
-# ---
-
-# ### Output Format:
-# **Report Type (If given)**: 
-# **Cleaned Content**
-
-# ---
-
-# Raw content:
-# {preprocessed[:200000]}
-# """
-
-
-#                 headers = {
-#                     'Authorization': f"Bearer {os.environ.get('DEEPSEEK_API_KEY')}",
-#                     'Content-Type': 'application/json',
-#                 }
-
-#                 data = {
-#                     'model': 'deepseek-chat',
-#                     'messages': [{'role': 'user', 'content': prompt}],
-#                     'stream': False
-#                 }
-
-#                 async with httpx.AsyncClient(timeout=60.0) as client:
-#                     response = await client.post(
-#                         "https://api.deepseek.com/chat/completions",
-#                         headers=headers,
-#                         data=json.dumps(data)
-#                     )
-#                     response.raise_for_status()
-#                     result = response.json()
-#                     markdown = result['choices'][0]['message']['content']
-#                     cleaned_series.at[index] = markdown
-#                     print(f'[deepseek] Parsed row {index}')
-
-#             except httpx.RequestError as e:
-#                 print(f"[deepseek] Request error at row {index}: {e}")
-#                 cleaned_series.at[index] = None
-#             except Exception as e:
-#                 print(f"[deepseek] Unexpected error at row {index}: {e}")
-#                 cleaned_series.at[index] = None
-
         tasks = [process_row(index) for index in series.index]
         await asyncio.gather(*tasks)
+        
         return cleaned_series
 
 
+    async def preprocess_and_pull_context_sec_yf(self, ticker: str = None):
+        start_time = time.time()
+        all_data = {}
+
+        # Step 1: Validate & find ticker
+        task_1 = time.time()
+        all_companies_df = await self.get_available_company_data()
+        logger.info(f"[{ticker}] Step 1 - Fetched company data ({len(all_companies_df)} rows) - {time.time() - task_1:.2f}s")
+        datapoint = all_companies_df[all_companies_df['ticker'] == ticker]
+
+        if datapoint.empty:
+            return None
+
+        row = datapoint.iloc[0]
+        all_data['ticker'] = ticker
+        all_data['cik'] = str(row["cik_str"]).zfill(10)
+        all_data['company_title'] = row["title"]
+        
+        # Step 2: Yahoo Finance Data
+        task_2 = time.time()
+        yf_data = await self.fetch_selected_stock_data_yf(selected_ticker=ticker)
+        yf_data.pop('price_history')
+        all_data['yf_stock_data'] = yf_data
+        logger.info(f"[{ticker}] Step 2 - Fetched Yahoo Finance data - {time.time() - task_2:.2f}s")
+
+        # Step 3: SEC Data
+        task_3 = time.time()
+        details_1, details_2, filing_accessions = await self.fetch_selected_company_details_and_filing_accessions(
+            selected_cik=all_data['cik']
+        )
+        logger.info(f"[{ticker}] Step 3 - Fetched SEC filings - {time.time() - task_3:.2f}s")
+        all_data['sec_details_1'] = details_1
+        all_data['sec_details_2'] = details_2
+        all_data['filing_accessions'] = filing_accessions
+        task_4 = time.time()
+        all_data['mapping_latest_docs'] = self.get_latest_filings_index(filings=all_data['filing_accessions'])
+        logger.info(f"[{ticker}] Step 4 - Get SEC documents index- {time.time() - task_4:.2f}s")
+
+        all_data['base_sec_df'] = self.create_base_df_for_sec_company_data(mapping_latest_docs=all_data['mapping_latest_docs'],
+                                                                            filings=all_data['filing_accessions'],
+                                                                            cik=all_data['cik'])
+        
+        task_5 = time.time()
+        docs_content_series = await self.fetch_all_filings(base_sec_df=all_data['base_sec_df'])
+        logger.info(f"[{ticker}] Step 5 - Fetch SEC documents - {time.time() - task_5:.2f}s")
+        task_6 = time.time()
+        docs_content_series_1 = await self.preprocess_docs_content(series=docs_content_series)
+        logger.info(f"[{ticker}] Step 6 - Preprocess SEC documents - {time.time() - task_6:.2f}s")
+        temp_df = all_data['base_sec_df'].copy()
+        temp_df['raw_content'] = docs_content_series
+        temp_df['content'] = docs_content_series_1
+        all_data['final_sec_df'] = temp_df
+
+        return all_data
 
