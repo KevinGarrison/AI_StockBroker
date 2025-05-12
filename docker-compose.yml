@@ -47,35 +47,35 @@ services:
       - /docker/host/dir:/data
     restart: always
 
-  # api_fetcher:
-  #   build: ./backend/microservices/api_fetcher
-  #   container_name: api-fetcher
-  #   expose:
-  #     - "8001"      
-  #   restart: always
+  api_fetcher:
+    build: ./backend/microservices/api_fetcher
+    container_name: api-fetcher
+    expose:
+      - "8001"      
+    restart: always
   
-  # rag_chatbot:
-  #   build: ./backend/microservices/rag_chatbot
-  #   container_name: rag-chatbot
-  #   expose:
-  #     - "8002"
-  #   depends_on:
-  #     - qdrant
-  #     - redis
-  #   restart: always
+  rag_chatbot:
+    build: ./backend/microservices/rag_chatbot
+    container_name: rag-chatbot
+    expose:
+      - "8002"
+    depends_on:
+      - qdrant
+      - redis
+    restart: always
 
-  # api_gateway:
-  #   build: ./backend/microservices/api_gateway
-  #   container_name: api-gateway
-  #   expose:
-  #     - "8000"
-  #   depends_on:
-  #     - influxdb
-  #     - qdrant
-  #     - redis
-  #     - api_fetcher
-  #     - rag_chatbot
-  #   restart: always
+  api_gateway:
+    build: ./backend/microservices/api_gateway
+    container_name: api-gateway
+    expose:
+      - "8000"
+    depends_on:
+      - influxdb
+      - qdrant
+      - redis
+      - api_fetcher
+      - rag_chatbot
+    restart: always
 
   # frontend:
   #   build: ./frontend
@@ -83,7 +83,7 @@ services:
   #   expose:
   #     - "4000"
   #   depends_on:
-  #     - backend
+  #     - api_gateway
   #   restart: always
 
   nginx:
