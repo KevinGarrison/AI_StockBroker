@@ -16,6 +16,7 @@ from bs4 import XMLParsedAsHTMLWarning
 import logging
 import warnings
 import time
+import numpy as np
 
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ class API_Fetcher:
         nasdaq = await asyncio.to_thread(si.tickers_nasdaq)
         sp500 = await asyncio.to_thread(si.tickers_sp500)
         all_tickers =  dow + nasdaq + sp500
+        logger.info("[Tickers Y Finance] ", all_tickers)
         return all_tickers
 
         
@@ -43,7 +45,8 @@ class API_Fetcher:
             async with httpx.AsyncClient() as client:
                 company_tickers = await client.get(
                     "https://www.sec.gov/files/company_tickers.json",
-                    headers=headers
+                    headers=headers,
+                    timeout = 120
                 )
                 logger.info(f"SEC response status code: {company_tickers.status_code}")
                 logger.info(f"Response headers: {company_tickers.headers}")
@@ -70,6 +73,7 @@ class API_Fetcher:
         company_ids = await self.fetch_company_cik_ticker_title()
         common = set(all_tickers) & set(company_ids["ticker"])
         subset_company_cik_ticker_title = company_ids[company_ids["ticker"].isin(common)]
+        logger.info("[Union Ticker]: ", subset_company_cik_ticker_title)
         return subset_company_cik_ticker_title
 
 
@@ -165,6 +169,7 @@ class API_Fetcher:
                 response = await client.get(
                     f'https://data.sec.gov/submissions/CIK{selected_cik}.json',
                     headers=headers,
+                    timeout = 120
                 )
                 response.raise_for_status()
                 filing_dict = response.json()
@@ -236,7 +241,7 @@ class API_Fetcher:
             url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{filename}"
 
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, headers=headers, timeout=20.0)
+                response = await client.get(url, headers=headers, timeout=120)
                 response.raise_for_status()
                 return response.content
 
@@ -309,54 +314,72 @@ class API_Fetcher:
         start_time = time.time()
         all_data = {}
 
-        # Step 1: Validate & find ticker
-        task_1 = time.time()
-        all_companies_df = await self.get_available_company_data()
-        logger.info(f"[{ticker}] Step 1 - Fetched company data ({len(all_companies_df)} rows) - {time.time() - task_1:.2f}s")
-        datapoint = all_companies_df[all_companies_df['ticker'] == ticker]
+        try:
+            # Step 1: Validate & find ticker
+            task_1 = time.time()
+            all_companies_df = await self.get_available_company_data()
+            logger.info(f"[{ticker}] Step 1 - Fetched company data ({len(all_companies_df)} rows) - {time.time() - task_1:.2f}s")
+            datapoint = all_companies_df[all_companies_df['ticker'] == ticker]
 
-        if datapoint.empty:
-            return None
+            if datapoint.empty:
+                raise ValueError(f"Ticker '{ticker}' not found in company data.")
 
-        row = datapoint.iloc[0]
-        all_data['ticker'] = ticker
-        all_data['cik'] = str(row["cik_str"]).zfill(10)
-        all_data['company_title'] = row["title"]
-        
-        # Step 2: Yahoo Finance Data
-        task_2 = time.time()
-        yf_data = await self.fetch_selected_stock_data_yf(selected_ticker=ticker)
-        yf_data.pop('price_history')
-        all_data['yf_stock_data'] = yf_data
-        logger.info(f"[{ticker}] Step 2 - Fetched Yahoo Finance data - {time.time() - task_2:.2f}s")
+            row = datapoint.iloc[0]
+            all_data['ticker'] = ticker
+            all_data['cik'] = str(row["cik_str"]).zfill(10)
+            all_data['company_title'] = row["title"]
 
-        # Step 3: SEC Data
-        task_3 = time.time()
-        details_1, details_2, filing_accessions = await self.fetch_selected_company_details_and_filing_accessions(
-            selected_cik=all_data['cik']
-        )
-        logger.info(f"[{ticker}] Step 3 - Fetched SEC filings - {time.time() - task_3:.2f}s")
-        all_data['sec_details_1'] = details_1
-        all_data['sec_details_2'] = details_2
-        all_data['filing_accessions'] = filing_accessions
-        task_4 = time.time()
-        all_data['mapping_latest_docs'] = self.get_latest_filings_index(filings=all_data['filing_accessions'])
-        logger.info(f"[{ticker}] Step 4 - Get SEC documents index- {time.time() - task_4:.2f}s")
+            # Step 2: Yahoo Finance Data
+            task_2 = time.time()
+            yf_data = await self.fetch_selected_stock_data_yf(selected_ticker=ticker)
+            yf_data.pop('price_history', None)
+            all_data['yf_stock_data'] = yf_data
+            logger.info(f"[{ticker}] Step 2 - Fetched Yahoo Finance data - {time.time() - task_2:.2f}s")
 
-        all_data['base_sec_df'] = self.create_base_df_for_sec_company_data(mapping_latest_docs=all_data['mapping_latest_docs'],
-                                                                            filings=all_data['filing_accessions'],
-                                                                            cik=all_data['cik'])
-        
-        task_5 = time.time()
-        docs_content_series = await self.fetch_all_filings(base_sec_df=all_data['base_sec_df'])
-        logger.info(f"[{ticker}] Step 5 - Fetch SEC documents - {time.time() - task_5:.2f}s")
-        task_6 = time.time()
-        docs_content_series_1 = await self.preprocess_docs_content(series=docs_content_series)
-        logger.info(f"[{ticker}] Step 6 - Preprocess SEC documents - {time.time() - task_6:.2f}s")
-        temp_df = all_data['base_sec_df'].copy()
-        temp_df['raw_content'] = docs_content_series
-        temp_df['content'] = docs_content_series_1
-        all_data['final_sec_df'] = temp_df
+            # Step 3: SEC Data
+            task_3 = time.time()
+            details_1, details_2, filing_accessions = await self.fetch_selected_company_details_and_filing_accessions(
+                selected_cik=all_data['cik']
+            )
+            logger.info(f"[{ticker}] Step 3 - Fetched SEC filings - {time.time() - task_3:.2f}s")
+            all_data['sec_details_1'] = details_1
+            all_data['sec_details_2'] = details_2
+            all_data['filing_accessions'] = filing_accessions
 
-        return all_data
+            # Step 4: Map latest documents
+            task_4 = time.time()
+            all_data['mapping_latest_docs'] = self.get_latest_filings_index(filings=all_data['filing_accessions'])
+            logger.info(f"[{ticker}] Step 4 - Get SEC documents index - {time.time() - task_4:.2f}s")
+
+            all_data['base_sec_df'] = self.create_base_df_for_sec_company_data(
+                mapping_latest_docs=all_data['mapping_latest_docs'],
+                filings=all_data['filing_accessions'],
+                cik=all_data['cik']
+            )
+
+            # Step 5: Fetch filings
+            task_5 = time.time()
+            docs_content_series = await self.fetch_all_filings(base_sec_df=all_data['base_sec_df'])
+            logger.info(f"[{ticker}] Step 5 - Fetch SEC documents - {time.time() - task_5:.2f}s")
+
+            # Step 6: Preprocess documents
+            task_6 = time.time()
+            docs_content_series_1 = await self.preprocess_docs_content(series=docs_content_series)
+            logger.info(f"[{ticker}] Step 6 - Preprocess SEC documents - {time.time() - task_6:.2f}s")
+
+            all_data['base_sec_df']['raw_content'] = docs_content_series
+            all_data['base_sec_df']['content'] = docs_content_series_1
+            all_data['base_sec_df'] = all_data['base_sec_df'].replace({np.nan: None, np.inf: None, -np.inf: None})
+
+            final_dict = {}
+
+            final_dict['yf_stock_data'] = all_data["yf_stock_data"]
+            final_dict['base_sec_df'] = all_data["base_sec_df"]
+
+            return final_dict
+
+        except Exception as e:
+            logger.error(f"[{ticker}] ERROR in preprocess_and_pull_context_sec_yf: {e}", exc_info=True)
+            raise
+
 

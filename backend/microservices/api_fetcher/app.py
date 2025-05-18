@@ -18,20 +18,20 @@ async def all_available_companies():
     return JSONResponse(content=encoded, status_code=200)
 
 @app.get("/stock-history/{ticker}")
-async def stock_history_of_selected_ticker(ticker: str = None):
+async def stock_history(ticker: str):
     data = await fetcher.fetch_selected_stock_data_yf(selected_ticker=ticker)
     encoded = jsonable_encoder(data['price_history'])
     return JSONResponse(content=encoded, status_code=200)
 
 @app.get("/yfinance-company-facts/{ticker}")
-async def stock_history_of_selected_ticker(ticker: str = None):
+async def company_facts_yf(ticker: str):
     data = await fetcher.fetch_selected_stock_data_yf(selected_ticker=ticker)
     data.pop('price_history')
     encoded = jsonable_encoder(data)
     return JSONResponse(content=encoded, status_code=200)
 
 @app.get("/company-context/{ticker}")
-async def company_context_selected_ticker(ticker: str = None):
+async def company_context_selected_ticker(ticker: str):
     context = await fetcher.preprocess_and_pull_context_sec_yf(ticker=ticker)
     encoded = jsonable_encoder(context)
     return JSONResponse(content=encoded, status_code=200)

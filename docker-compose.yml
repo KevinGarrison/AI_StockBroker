@@ -41,20 +41,21 @@ services:
 
   redis:
     image: redis
+    container_name: redis
     ports:
       - "6379:6379"
     volumes:
-      - /docker/host/dir:/data
+      - redis-data:/data
     restart: always
 
-  api_fetcher:
+  api-fetcher:
     build: ./backend/microservices/api_fetcher
     container_name: api-fetcher
     expose:
       - "8001"      
     restart: always
   
-  rag_chatbot:
+  rag-chatbot:
     build: ./backend/microservices/rag_chatbot
     container_name: rag-chatbot
     expose:
@@ -64,7 +65,7 @@ services:
       - redis
     restart: always
 
-  api_gateway:
+  api-gateway:
     build: ./backend/microservices/api_gateway
     container_name: api-gateway
     expose:
@@ -73,8 +74,8 @@ services:
       - influxdb
       - qdrant
       - redis
-      - api_fetcher
-      - rag_chatbot
+      - api-fetcher
+      - rag-chatbot
     restart: always
 
   # frontend:
@@ -83,7 +84,7 @@ services:
   #   expose:
   #     - "4000"
   #   depends_on:
-  #     - api_gateway
+  #     - api-gateway
   #   restart: always
 
   nginx:
@@ -94,7 +95,7 @@ services:
     volumes:
       - ./nginx:/etc/nginx:ro
     depends_on:
-      - api_gateway
+      - api-gateway
       #- frontend
     restart: always
 

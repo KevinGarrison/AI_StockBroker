@@ -68,7 +68,7 @@ class RAG_Chatbot:
             logger.error(f"[Redis ERROR] Couldn't delete collection: {e}")
 
 
-    def process_text_to_qdrant(self, context_docs: dict, client: QdrantClient, redis: redis.Redis) -> QdrantVectorStore:
+    def process_text_to_qdrant(self, context_docs:pd.DataFrame, client: QdrantClient, redis: redis.Redis) -> QdrantVectorStore:
         try:
             
             collection_name = os.getenv('COLLECTION_NAME')

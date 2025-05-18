@@ -19,7 +19,7 @@ vector_db = {}
 
 class ContextData(BaseModel):
     yf_stock_data: dict
-    sec_details_1: dict
+    base_sec_df: dict
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -54,14 +54,7 @@ async def process_and_get_most_relevant_files(
     """
     context_dict = context.dict()
 
-    context_df = pd.DataFrame([{
-        "raw_content": "...",   # ← required field
-        "content": "...",       # ← required field
-        "cik": context_dict['sec_details_1'].get("cik", ""),
-        "accession_number": context_dict['sec_details_1'].get("accession_number", ""),
-        "docs": context_dict['sec_details_1'].get("docs", ""),
-        "form": context_dict['sec_details_1'].get("form", "")
-    }])
+    context_df = pd.DataFrame.from_dict(context_dict['base_sec_df'])
 
     task_7 = time.time()
     vector_store = await asyncio.to_thread(
@@ -89,7 +82,7 @@ async def process_and_get_most_relevant_files(
     ]
 
     context_yf = str(context.yf_stock_data)
-    company_facts = str(context.sec_details_1)
+    company_facts = str(sec_result_formatted)
 
     task_9 = time.time()
     final_broker_analysis = await rag_bot.deepseek_r1_broker_analysis(
@@ -111,7 +104,7 @@ async def process_and_get_most_relevant_files(
         ]
     }
 
-    return JSONResponse(content=jsonable_encoder(result_json), status_code=200)
+    return JSONResponse(content=result_json, status_code=200)
 
 @app.get("/reference-doc-from-analysis/{accession}/{filename}")
 async def get_reference_files(accession: str, filename: str):
