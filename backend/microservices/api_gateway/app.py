@@ -16,7 +16,7 @@ app = FastAPI()
 @app.get("/companies")
 async def companies():
     async with httpx.AsyncClient() as client:
-        response = await client.get("http://api-fetcher:8001/companies")#("http://localhost:8001/companies", timeout=120.0)
+        response = await client.get("http://api-fetcher:8001/companies")
         return response.json()
 
 @app.get("/stock-history/{ticker}")
