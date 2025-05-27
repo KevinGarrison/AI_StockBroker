@@ -79,14 +79,14 @@ services:
       - forecasting
     restart: always
 
-  # frontend:
-  #   build: ./frontend
-  #   container_name: tbd-frontend
-  #   expose:
-  #     - "4000"
-  #   depends_on:
-  #     - api-gateway
-  #   restart: always
+  frontend:
+    build: ./frontend
+    container_name: tbd-frontend
+    expose:
+     - "4000"
+    depends_on:
+      - api-gateway
+    restart: always
 
   nginx:
     image: nginx:latest
@@ -97,7 +97,7 @@ services:
       - ./nginx:/etc/nginx:ro
     depends_on:
       - api-gateway
-      #- frontend
+      - frontend
     restart: always
 
   forecasting:
