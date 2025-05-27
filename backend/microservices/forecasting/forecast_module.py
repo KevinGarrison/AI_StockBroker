@@ -6,17 +6,16 @@ def forecast_stock(ticker: str, df: pd.DataFrame) -> dict:
     """
     Predicts the share price for a given ticker symbol by using Nixtla NeuralForecast (RNN model).
     """
-    data = df
-    df['unique_id'] = ticker
+    # Step 1: Parse datetimes, keeping timezone info
+    df['ds'] = pd.to_datetime(df['ds'], utc=True)
 
+    # Step 2: Remove timezone info, so it's datetime64[ns] (naive)
+    df['ds'] = df['ds'].dt.tz_localize(None)    
+    df['unique_id'] = ticker
+    print(df['ds'])
     # Further features
-    df['recommendation'] = 1 if data['recommendation_key'] == 'buy' else 0
-    df['eps_forward'] = data['eps_forward']
-    df['revenue_growth'] = data['revenue_growth']
-    df['recommendation_mean'] = data['recommendation_mean']
-    df['gross_margins'] = data['gross_margins']
-    df['dividend_yield'] = data['dividend_yield']
-    df['debt_to_equity'] = data['debt_to_equity']
+    #df['recommendation'] = 1 if data['recommendation'] == 'buy' else 0
+    df['recommendation'] = (df['recommendation'] == 'buy').astype(int)
 
     feature_columns = [
         'recommendation', 'eps_forward', 'revenue_growth',

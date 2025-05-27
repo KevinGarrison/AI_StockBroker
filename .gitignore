@@ -7,6 +7,7 @@
 node_modules/
 dist/
 temp_sec_files/
+lightning_logs/
 
 # Compiled Java class files
 *.class
