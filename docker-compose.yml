@@ -54,6 +54,8 @@ services:
     expose:
       - "8001"      
     restart: always
+    ports:
+      - "8001:8001"
   
   rag-chatbot:
     build: ./backend/microservices/rag_chatbot
@@ -97,6 +99,17 @@ services:
     depends_on:
       - api-gateway
       #- frontend
+    restart: always
+
+  forecasting:
+    build: ./backend/microservices/forecasting
+    container_name: forecasting
+    expose:
+      - "8003"
+    depends_on:
+      - influxdb
+      - qdrant
+      - redis
     restart: always
 
 volumes:
