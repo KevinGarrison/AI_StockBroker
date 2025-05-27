@@ -54,8 +54,6 @@ services:
     expose:
       - "8001"      
     restart: always
-    ports:
-      - "8001:8001"
   
   rag-chatbot:
     build: ./backend/microservices/rag_chatbot
