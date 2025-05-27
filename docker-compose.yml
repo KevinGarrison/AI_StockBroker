@@ -78,6 +78,7 @@ services:
       - redis
       - api-fetcher
       - rag-chatbot
+      - forecasting
     restart: always
 
   # frontend:
