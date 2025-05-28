@@ -1,11 +1,15 @@
+import sys
 import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from api_fetcher.api_data_fetcher import API_Fetcher
+
 import asyncio
 import yfinance as yf
 import pandas as pd
 import logging
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS 
-from api_data_fetcher import API_Fetcher
+
 
 # Configure logging
 logging.basicConfig(
@@ -112,7 +116,7 @@ class InfluxDBHandler:
 async def main():
     collector = DataCollector()
     influx_handler = InfluxDBHandler()
-    fetcher = API_Fetcher()  
+    fetcher = API_Fetcher()
 
     logger.info("Fetching list of all major stock indices...")
     tickers = await fetcher.fetch_all_major_indices()  
