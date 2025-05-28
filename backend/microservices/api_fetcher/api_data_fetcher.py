@@ -75,8 +75,16 @@ class API_Fetcher:
         subset_company_cik_ticker_title = company_ids[company_ids["ticker"].isin(common)]
         logger.info("[Union Ticker]: ", subset_company_cik_ticker_title)
         return subset_company_cik_ticker_title
-
-
+    
+    async def get_company_news(self, selected_ticker)->json:
+        try:    
+            if not selected_ticker:
+                raise ValueError(f"Fund '{selected_ticker}' not found.")
+            news = yf.Ticker(selected_ticker).get_news()
+            return news        
+        except Exception as e:
+            print(f"Failed 'fetch_stock_data_yf': {e}")
+    
     async def fetch_selected_stock_data_yf(self, selected_ticker:str=None, period:str="10y", interval:str="1mo") -> dict[str, any]:
         try:
             if not selected_ticker:

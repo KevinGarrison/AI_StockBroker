@@ -30,6 +30,12 @@ async def company_facts(ticker: str):
     async with httpx.AsyncClient() as client:
         response = await client.get(f"http://api-fetcher:8001/yfinance-company-facts/{ticker}")
         return response.json()
+
+@app.get("/company-news/{ticker}")
+async def company_news(ticker: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"http://api-fetcher:8001/company-news/{ticker}")
+        return response.json()
     
 @app.get("/stock-broker-analysis/{ticker}")
 async def stock_broker_analysis(ticker: str):
