@@ -15,7 +15,7 @@ app = FastAPI()
 async def get_forecast(ticker: str):
     async with httpx.AsyncClient() as client:
         # Preis-Historie abrufen
-        res_history = await client.get("http://api-fetcher:8001/stock-history/{ticker}", timeout=None)
+        res_history = await client.get(f"http://api-fetcher:8001/stock-history/{ticker}", timeout=None)
         if res_history.status_code != 200:
             return JSONResponse(content={"error": "Stock history unavailable"}, status_code=500)
         price_data = res_history.json()
