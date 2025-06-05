@@ -36,5 +36,9 @@ async def company_context_selected_ticker(ticker: str):
     encoded = jsonable_encoder(context)
     return JSONResponse(content=encoded, status_code=200)
 
-
+@app.get("/company-news/{ticker}")
+async def company_news_selected_ticker(ticker: str):
+    context = await fetcher.get_company_news(ticker)
+    encoded = jsonable_encoder(context)
+    return JSONResponse(content=encoded, status_code=200)
 

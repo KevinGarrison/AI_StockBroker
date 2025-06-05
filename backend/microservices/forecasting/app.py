@@ -15,19 +15,17 @@ app = FastAPI()
 async def get_forecast(ticker: str):
     async with httpx.AsyncClient() as client:
         # Preis-Historie abrufen
-        #res_history = await client.get(f"http://localhost:80/stock-history/{ticker}")
-        res_history = await client.get("http://api-fetcher:8001/stock-history/{ticker}")
-
+        res_history = await client.get(f"http://api-fetcher:8001/stock-history/{ticker}", timeout=None)
         if res_history.status_code != 200:
             return JSONResponse(content={"error": "Stock history unavailable"}, status_code=500)
         price_data = res_history.json()
 
         # Unternehmensdaten abrufen
-        res_facts = await client.get(f"http://api-fetcher:8001/yfinance-company-facts/{ticker}")
+        res_facts = await client.get(f"http://api-fetcher:8001/yfinance-company-facts/{ticker}", timeout=None)
         if res_facts.status_code != 200:
             return JSONResponse(content={"error": "Company facts unavailable"}, status_code=500)
         facts_data = res_facts.json()
-
+    
     # Preis-Daten in DataFrame laden
     # In DataFrame umwandeln
     df = pd.DataFrame(list(price_data.items()), columns=['ds', 'y'])
