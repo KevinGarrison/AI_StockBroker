@@ -42,7 +42,7 @@ function App() {
       setProgress((prev) => (prev < 90 ? prev + 1 : prev));
     }, 90);
 
-    fetch("/api/")
+    fetch("/api/companies")
       .then((res) => res.json())
       .then((json) => {
         // Falls json ein String ist (also nochmal geparst werden muss)
