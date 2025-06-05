@@ -37,36 +37,38 @@
   }
 }
 
-
-
-.clock-box {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-  transition: transform 0.2s ease;
-  text-align: center;
-  width: 100%;
-  max-width: 220px;
+.search-input {
+  padding: 1rem 1.5rem;
+  font-size: 1.1rem;
+  border-radius: 10px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+  max-width: 500px;
   margin: 0 auto;
+  transition: all 0.2s ease-in-out;
 }
 
-.clock-box:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+.search-input:focus {
+  outline: none;
+  border: 2px solid #0d6efd;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
 }
 
-.clock-title {
-  font-size: 14px;
+.btn-modern-primary {
+  background-color: #0d6efd;
+  color: white;
+  border: none;
+  padding: 0.65rem 1.4rem;
+  font-size: 2rem;
   font-weight: 500;
-  color: #555;
-  margin-bottom: 5px;
+  border-radius: 8px;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
 }
 
-.clock-time {
-  font-size: 26px;
-  font-weight: 600;
-  color: #0d6efd;
+.btn-modern-primary:hover {
+  background-color: #0b5ed7;
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(13, 110, 253, 0.3);
 }
 
 
