@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import StockLoadingScreen from "../components/StockLoadingScreen";
-import WorldClockGrid from "../components/WorldClockGrid";
-import SearchBarFilters from "../components/SearchBarFilter";
+import StockLoadingScreen from "../components/landingPage/StockLoadingScreen";
+import WorldClockGrid from "../components/landingPage/WorldClockGrid";
+import SearchBarFilters from "../components/landingPage/SearchBarFilter";
 
 const cities = [
   { name: "London", timezone: "Europe/London" },
@@ -65,7 +65,7 @@ function LandingPage() {
   };
 
   return (
-    <div style={{ backgroundColor: "#f0f2f5", minHeight: "100vh" }}>
+    <div style={{ backgroundColor: "#f0f2f5", minHeight: "100vh",  }}>
       <div className="container py-5 text-center">
         <h1 className="mb-4">Stockbroker AI</h1>
 

@@ -15,19 +15,13 @@
 // }
 
 // export default StockLoadingScreen;
-// import React from "react";
-
-import React from "react";
 
 function StockLoadingScreen() {
   return (
     <div className="text-center my-5">
       <div className="mb-4">
         <i
-          className="fas fa-chart-line fa-2x text-primary"
-          style={{
-            animation: "pulse 1.2s ease-in-out infinite",
-          }}
+          className="fa-solid fa-chart-line fa-2xl fa-beat-fade text-primary"
         ></i>
       </div>
       <h5 className="text-muted">Fetching stock market data...</h5>
@@ -35,15 +29,6 @@ function StockLoadingScreen() {
         Please wait while we prepare your investment dashboard.
       </p>
 
-      <style>
-        {`
-          @keyframes pulse {
-            0% { transform: scale(1); opacity: 0.75; }
-            50% { transform: scale(1.12); opacity: 1; }
-            100% { transform: scale(1); opacity: 0.75; }
-          }
-        `}
-      </style>
     </div>
   );
 }
