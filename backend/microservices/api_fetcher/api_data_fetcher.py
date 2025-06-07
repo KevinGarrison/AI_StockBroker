@@ -68,8 +68,6 @@ class API_Fetcher:
     
     
     async def get_available_company_data(self)->tuple[list, pd.DataFrame]:
-        # Get all Major Tickers and Fetch a Dataframe containing all CIK ID's, Ticker, Company Titles 
-        # available on sec.gov and the get union of yFinance and SEC Data
         all_tickers = await self.fetch_all_major_indices()
         company_ids = await self.fetch_company_cik_ticker_title()
         common = set(all_tickers) & set(company_ids["ticker"])
