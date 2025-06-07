@@ -9,6 +9,12 @@ import logging
 import asyncio
 import time
 import pandas as pd
+import json
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +23,16 @@ rag_bot = RAG_Chatbot()
 redis_db = {}
 vector_db = {}
 
+SEC_FORM_RANK = [
+    "10-K", "10-Q", "8-K", "S-1", "DEF 14A", "20-F", "6-K", "13D/13G", "4", "S-8"
+]
+
+
 class ContextData(BaseModel):
     yf_stock_data: dict
     base_sec_df: dict
+    forecast: dict
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -44,96 +57,83 @@ async def process_and_get_most_relevant_files(
     ticker: str,
     context: ContextData = Body(...)
 ):
-    prompt = f"""Find the most important recent SEC filings for {ticker}
-    focusing on documents relevant to stock research such as:
-    10-K (annual report),
-    10-Q (quarterly report),
-    8-K (material events),
-    S-1 (if applicable),
-    and DEF 14A (proxy statements).
-    """
+    prompt = """Find the highest risk according to the 10k form"""
     context_dict = context.dict()
-
+    
+    yf_stock_data = context_dict['yf_stock_data']
     context_df = pd.DataFrame.from_dict(context_dict['base_sec_df'])
+    forecast = context_dict['forecast']
+    
+    await asyncio.to_thread(rag_bot.store_docs_by_filing_type_list,    
+                            context_docs=context_df, redis_client=redis_db["client"])
 
-    task_7 = time.time()
-    vector_store = await asyncio.to_thread(
-        rag_bot.process_text_to_qdrant,
-        context_docs=context_df,  
-        client=vector_db["client"],
-        redis=redis_db["client"]
+        
+    form, doc = await asyncio.to_thread(
+        rag_bot.get_first_available_form_content, 
+        redis_client=redis_db["client"], 
+        form_rank=SEC_FORM_RANK
     )
-    logger.info(f"[{ticker}] Step 7 - Store SEC documents in vector db - {time.time() - task_7:.2f}s")
 
-    task_8 = time.time()
-    vdb_result = await asyncio.to_thread(
+    vec_db = await asyncio.to_thread(
+        rag_bot.process_most_important_form_to_qdrant,
+        context_docs=context_df,
+        qdrant_client=vector_db["client"],
+        sec_form_rank=SEC_FORM_RANK
+    )
+
+    vec_db_results = await asyncio.to_thread(
         rag_bot.query_qdrant,
         prompt=prompt,
-        vector_store=vector_store
+        vector_store=vec_db
     )
-    logger.info(f"[{ticker}] Step 8 - Query SEC documents in vector db - {time.time() - task_8:.2f}s")
 
-    sec_result_formatted = [
-        {
-            "content": doc.page_content,
-            "metadata": doc.metadata
-        }
-        for doc in vdb_result
-    ]
-
-    context_yf = str(context.yf_stock_data)
-    company_facts = str(sec_result_formatted)
-
-    task_9 = time.time()
-    final_broker_analysis = await rag_bot.deepseek_r1_broker_analysis(
-        company_facts=company_facts,
-        context_y_finance=context_yf,
-        context_sec=str(sec_result_formatted)
-    )
-    logger.info(f"[{ticker}] Step 9 - Final AI Broker Analysis - {time.time() - task_9:.2f}s")
-
-    result_json = {
-        "broker_analysis": final_broker_analysis,
-        "reference_file_metadata": [
-            {
-                "cik": doc["metadata"].get("cik"),
-                "accession_number": doc["metadata"].get("accession_number"),
-                "filename": doc["metadata"].get("docs")
+    if form and doc:
+        sec_result_formatted = {
+            "Form": form,
+            "content": vec_db_results,
+            "metadata": {
+                "cik": doc.get("cik"),
+                "accession": doc.get("accession"),
+                "filename": doc.get("filename"),
+                "form": doc.get("form")
             }
-            for doc in sec_result_formatted
-        ]
-    }
+        }
+    else:
+        sec_result_formatted = {}
 
-    return JSONResponse(content=result_json, status_code=200)
 
-@app.get("/reference-doc-from-analysis/{accession}/{filename}")
-async def get_reference_files(accession: str, filename: str):
+    context_yf = str(yf_stock_data)
+
+    final_broker_analysis = await rag_bot.deepseek_r1_broker_analysis(
+        context_y_finance=str(context_yf),
+        context_sec=str(sec_result_formatted)[:10000],
+        forecast_yf = str(forecast)
+    )
+
+    encoded = jsonable_encoder(final_broker_analysis)
+    return JSONResponse(content=encoded, status_code=200)
+
+
+@app.get("/reference-docs-from-analysis")
+async def get_reference_files():
     if not redis_db.get("client"):
         raise HTTPException(status_code=500, detail="Redis client not available.")
 
     try:
         redis = redis_db["client"]
-        key = f"{accession}/{filename}"
-        doc_data = await asyncio.to_thread(redis.hgetall, key)
-
-        if not doc_data:
-            raise HTTPException(status_code=404, detail="Document not found in Redis.")
-
-        decoded_doc_data = {k.decode(): v.decode() for k, v in doc_data.items()}
-        html_content = decoded_doc_data.get("raw_content")
-
-        form = decoded_doc_data.get("form")
-        file_name = decoded_doc_data.get("filename")
-
-        temp_dir = Path("temp_sec_files")
-        temp_dir.mkdir(exist_ok=True)
-
-        output_path = temp_dir / f"{form}_{file_name}"
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(html_content)
-
-        return JSONResponse(content=jsonable_encoder(decoded_doc_data), status_code=200)
+        all_docs = await asyncio.to_thread(rag_bot.get_all_docs_from_redis, redis)
+        return JSONResponse(content=jsonable_encoder(all_docs), status_code=200)
 
     except Exception as e:
-        logger.error(f"[REDIS ERROR] Failed to fetch {accession}/{filename} - {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve document from Redis.")
+        logger.error(f"[REDIS ERROR] Failed to fetch reference docs - {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve documents from Redis.")
+
+    
+@app.get("/delete-cached-docs")
+async def delete_docs():
+    rag_bot.delete_vec_docs(client=vector_db["client"])
+    rag_bot.delete_cached_docs(client=redis_db["client"])
+
+    return JSONResponse(content={"message": "Cache successfully deleted"}, status_code=200)
+
+
