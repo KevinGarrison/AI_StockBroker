@@ -7,6 +7,7 @@ import os
 from io import BytesIO
 import yfinance as yf
 from yahoo_fin import stock_info as si
+import yahooquery as yq
 from docling.document_converter import DocumentConverter
 from docling.datamodel.base_models import DocumentStream
 import json
@@ -34,19 +35,19 @@ class API_Fetcher:
         nasdaq = await asyncio.to_thread(si.tickers_nasdaq)
         sp500 = await asyncio.to_thread(si.tickers_sp500)
         all_tickers =  dow + nasdaq + sp500
-        logger.info("[Tickers Y Finance] ", all_tickers)
+        logger.info("[Tickers Y Finance] %s", all_tickers[:5])
         return all_tickers
 
         
     async def fetch_company_cik_ticker_title(self)->pd.DataFrame:
         try:
             headers = {'User-Agent': os.environ.get('USER_AGENT_SEC')}
-            logger.info(f"Using headers for SEC request: {headers}")
+            logger.info(f"[Header_SEC]: {headers}")
             async with httpx.AsyncClient() as client:
                 company_tickers = await client.get(
                     "https://www.sec.gov/files/company_tickers.json",
                     headers=headers,
-                    timeout = 120
+                    timeout = None
                 )
                 logger.info(f"SEC response status code: {company_tickers.status_code}")
                 logger.info(f"Response headers: {company_tickers.headers}")
@@ -73,7 +74,7 @@ class API_Fetcher:
         company_ids = await self.fetch_company_cik_ticker_title()
         common = set(all_tickers) & set(company_ids["ticker"])
         subset_company_cik_ticker_title = company_ids[company_ids["ticker"].isin(common)]
-        logger.info("[Union Ticker]: ", subset_company_cik_ticker_title)
+        logger.info("[Union Ticker]: %s", subset_company_cik_ticker_title[:3])
         return subset_company_cik_ticker_title
     
     async def get_company_news(self, selected_ticker)->json:
@@ -94,6 +95,7 @@ class API_Fetcher:
                 yf_ticker = yf.Ticker(selected_ticker)
                 hist = yf_ticker.history(period=period, interval=interval)
                 info = yf_ticker.info
+                news = yf_ticker.get_news()
 
                 return {
                     "ticker": selected_ticker,
@@ -160,6 +162,9 @@ class API_Fetcher:
                     "profit_margins": info.get("profitMargins"),
                     "return_on_assets": info.get("returnOnAssets"),
                     "return_on_equity": info.get("returnOnEquity"),
+
+                    # News
+                    "news": news
                 }
 
             return await asyncio.to_thread(_fetch_data)
@@ -177,7 +182,7 @@ class API_Fetcher:
                 response = await client.get(
                     f'https://data.sec.gov/submissions/CIK{selected_cik}.json',
                     headers=headers,
-                    timeout = 120
+                    timeout = None
                 )
                 response.raise_for_status()
                 filing_dict = response.json()
@@ -249,7 +254,7 @@ class API_Fetcher:
             url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{filename}"
 
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, headers=headers, timeout=120)
+                response = await client.get(url, headers=headers, timeout=None)
                 response.raise_for_status()
                 return response.content
 
@@ -389,5 +394,110 @@ class API_Fetcher:
         except Exception as e:
             logger.error(f"[{ticker}] ERROR in preprocess_and_pull_context_sec_yf: {e}", exc_info=True)
             raise
+
+    
+    def is_relevant_screener(self, scr):
+        EXCLUDE_KEYWORDS = [
+            "etf", "fund", "mutual", "bond", "commodity", "crypto",
+            "currency", "option", "futures", "yield", "day_losers",
+            "day_losers_br", "day_losers_de", "day_losers_dji", "day_losers_es",
+            "day_losers_fr","day_losers_gb", "day_losers_hk", "day_losers_it",
+            "day_losers_ndx", "day_losers_nz", "day_losers_sg"
+        ]
+        REGION_KEYWORDS = [
+            "europe", "asia", "latam", "china", "japan", "brazil", "africa", "au", "in", "ca"
+        ]
+        if isinstance(scr, dict):
+            fields = [
+                scr.get('id', ''), scr.get('title', ''),
+                scr.get('description', ''), scr.get('canonicalName', '')
+            ]
+            for f in fields:
+                if any(k in f.lower() for k in EXCLUDE_KEYWORDS + REGION_KEYWORDS):
+                    return False
+            qtype = scr.get('criteriaMeta', {}).get('quoteType', '').lower()
+            if qtype != "equity":
+                return False
+            for crit in scr.get('criteriaMeta', {}).get('criteria', []):
+                if crit['field'] == 'exchange':
+                    values = crit.get('dependentValues', [])
+                    if not any(x in values for x in ['NMS', 'NYQ']):
+                        return False
+            return True
+        else:
+            return not any(k in scr.lower() for k in EXCLUDE_KEYWORDS + REGION_KEYWORDS)
+
+    async def get_available_dropdown_values_async(self):
+        def fetch_screeners():
+            s = yq.Screener()
+            try:
+                screeners = s.available_screeners
+            except Exception as e:
+                print(f"Error fetching available_screeners: {e}")
+                return []
+            if hasattr(screeners, "get"):
+                return screeners.get("data", [])
+            else:
+                return screeners
+
+        screener_list = await asyncio.to_thread(fetch_screeners)
+
+        filtered_screeners = []
+        if screener_list and isinstance(screener_list[0], dict):
+            for scr in screener_list:
+                if self.is_relevant_screener(scr):
+                    filtered_screeners.append(scr.get('title', scr.get('id')))
+        else:
+            for scr in screener_list:
+                if self.is_relevant_screener(scr):
+                    filtered_screeners.append(scr)
+        return filtered_screeners
+    
+    def get_tickers_for_screener_sync(self, screener_id_or_title):
+        s = yq.Screener()
+        try:
+            results = s.get_screeners([screener_id_or_title])
+        except Exception as e:
+            print(f"Error fetching screener '{screener_id_or_title}': {e}")
+            return []
+        tickers = []
+        try:
+            key = next(iter(results))
+            data = results[key]
+            for item in data['quotes']:
+                if 'symbol' in item:
+                    tickers.append(item['symbol'])
+        except Exception as e:
+            print(f"Error parsing tickers: {e}")
+        return tickers
+
+    async def get_tickers_for_screener_async(self, screener_id_or_title):
+        return await asyncio.to_thread(self.get_tickers_for_screener_sync, screener_id_or_title)
+
+ 
+    
+    async def filter_tickers_by_market_cap_async(
+            self, tickers, min_market_cap=1e9
+    ):
+        if not tickers:
+            return []
+        filtered = []
+        for i in range(0, len(tickers), 50):
+            batch = tickers[i:i+50]
+            def fetch_summary_detail():
+                q = yq.Ticker(batch)
+                return q.summary_detail
+            data = await asyncio.to_thread(fetch_summary_detail)
+            for symbol in batch:
+                cap = None
+                try:
+                    cap = data[symbol]['marketCap']
+                except Exception:
+                    continue
+                if cap is None:
+                    continue
+                if cap >= min_market_cap:
+                    filtered.append(symbol)
+        return filtered
 
 

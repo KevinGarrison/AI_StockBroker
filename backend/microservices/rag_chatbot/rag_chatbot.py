@@ -4,6 +4,7 @@ from qdrant_client.http.models import VectorParams, Distance
 from langchain.text_splitter import MarkdownTextSplitter, TokenTextSplitter
 from qdrant_client import QdrantClient
 from langchain_openai import OpenAIEmbeddings
+from langchain.output_parsers import PydanticOutputParser
 from dataclasses import dataclass
 import json
 from openai import AsyncOpenAI
@@ -16,12 +17,28 @@ import logging
 import warnings
 import pandas as pd
 import redis
+from pydantic import BaseModel
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 load_dotenv()
 
+class SecMetaData(BaseModel):
+    file_name: str
+    file_date: str
+    file_type: str
+
+class BrokerAnalysisOutput(BaseModel):
+    company_name: str
+    technical_analysis: str
+    fundamental_analysis: str
+    sentiment_analysis: str
+    risks_sec_files: str
+    final_recommendation: str
+    justification: str
+    sec_metadata: List[SecMetaData]
 
 @dataclass
 class RAG_Chatbot:
@@ -68,157 +85,197 @@ class RAG_Chatbot:
             logger.error(f"[Redis ERROR] Couldn't delete collection: {e}")
 
 
-    def process_text_to_qdrant(self, context_docs:pd.DataFrame, client: QdrantClient, redis: redis.Redis) -> QdrantVectorStore:
+    def process_most_important_form_to_qdrant(
+        self,
+        context_docs: pd.DataFrame,
+        qdrant_client: QdrantClient,
+        sec_form_rank: list,
+    ) -> QdrantVectorStore:
+        """
+        Only store the single most important doc (by sec_form_rank) in Qdrant.
+        """
         try:
-            
             collection_name = os.getenv('COLLECTION_NAME')
-            chunk_size = int(os.getenv('CHUNK_SIZE', 3500))  # now in tokens
+            chunk_size = int(os.getenv('CHUNK_SIZE', 3500))
             chunk_overlap = int(os.getenv('OVERLAP_SIZE', 200))
-
             markdown_splitter = MarkdownTextSplitter(chunk_size=10000, chunk_overlap=0)
             token_splitter = TokenTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
-            documents = []
-            
-            for index, row in context_docs.iterrows():
-                raw_content = row.get("raw_content")
-                content = row.get("content")
-                cik = row.get("cik")
-                acc = row.get("accession_number")
-                file = row.get("docs")
-                form = row.get("form")
-                
-                cached_docs = {
-                    "raw_content":raw_content.decode("utf-8") if isinstance(raw_content, bytes) else str(raw_content),
-                    "cik":f"{cik}",
-                    "accession":f"{acc}",
-                    "form":f"{form}",
-                    "filename":f"{file}"
-                }
+            # Find the first document that matches the ranking
+            doc_row = None
+            for form in sec_form_rank:
+                filtered = context_docs[context_docs['form'] == form]
+                if not filtered.empty:
+                    doc_row = filtered.iloc[0]
+                    break
 
-                if raw_content is not None and cik is not None and acc is not None and form is not None and file is not None:
-                    redis_key = f"{str(acc)}/{str(file)}"
-                    redis.hset(
-                        name=redis_key,
-                        mapping=cached_docs
-                    )
-                    logger.info(f"[REDIS] Stored document: {file} with key: {redis_key} in db=0")
-                else:
-                    logger.warning(f"[REDIS] Skipping Redis write due to None value - accession: {acc}, file: {file}")
-                metadata = {k: v for k, v in row.items() if k != "content" and k != "raw_content"}
-
-                # Step 1: Markdown structure chunks
+            if doc_row is not None:
+                content = doc_row.get("content")
+                metadata = {k: v for k, v in doc_row.items() if k != "content" and k != "raw_content"}
+                documents = []
                 markdown_chunks = markdown_splitter.split_text(str(content))
-
-                # Step 2: Token-limited chunks per markdown section
                 for md_chunk in markdown_chunks:
                     token_chunks = token_splitter.split_text(md_chunk)
                     for chunk in token_chunks:
                         documents.append(Document(page_content=chunk, metadata=metadata))
 
-            uuids = [str(uuid4()) for _ in documents]
+                if not documents:
+                    logger.warning("[Qdrant] No documents to add — skipping.")
+                    return None
 
-            embeddings = OpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL_OPENAI"))
+                uuids = [str(uuid4()) for _ in documents]
+                embeddings = OpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL_OPENAI"))
+                existing = qdrant_client.get_collections().collections
+                existing_names = [c.name for c in existing]
 
-            existing = client.get_collections().collections
-            existing_names = [c.name for c in existing]
+                if collection_name not in existing_names:
+                    vector_size = int(os.getenv("VECTOR_SIZE", 3072))
+                    qdrant_client.create_collection(
+                        collection_name=collection_name,
+                        vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE)
+                    )
+                    logger.info(f"[Qdrant] Created collection '{collection_name}'")
 
-            if collection_name not in existing_names:
-                vector_size = int(os.getenv("VECTOR_SIZE", 3072))
-                client.create_collection(
-                    collection_name=collection_name,
-                    vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE)
+                vector_store = QdrantVectorStore.from_existing_collection(
+                    host=os.getenv("QDRANT_HOST"),
+                    port=int(os.getenv("QDRANT_PORT")),
+                    embedding=embeddings,
+                    collection_name=collection_name
                 )
-                logger.info(f"[Qdrant] Created collection '{collection_name}'")
-
-            vector_store = QdrantVectorStore.from_existing_collection(
-                host=os.getenv("QDRANT_HOST"),
-                port=int(os.getenv("QDRANT_PORT")),
-                embedding=embeddings,
-                collection_name=collection_name
-            )
-
-
-            if not documents:
-                logger.warning("[Qdrant] No documents to add — skipping.")
+                vector_store.add_documents(documents=documents, ids=uuids)
+                logger.info(f"[Qdrant] Stored {len(documents)} document chunks in '{collection_name}'")
+                return vector_store
+            else:
+                logger.warning("[Qdrant] No ranked form found in docs.")
                 return None
-
-            vector_store.add_documents(documents=documents, ids=uuids)
-            logger.info(f"[Qdrant] Stored {len(documents)} document chunks in '{collection_name}'")
-            return vector_store
 
         except Exception as e:
             logger.error(f"[Qdrant ERROR] {e}")
             raise
 
+    
+    
     def query_qdrant(self, prompt: str, vector_store:QdrantVectorStore) -> Document:
         try:
-            return vector_store.similarity_search(prompt, k=1)
+            return vector_store.similarity_search(prompt, k=4)
         except Exception as e:
             logger.error(f"[Qdrant ERROR] {e}")
-            return []
-    
+            return [] 
 
-    async def gpt4o_mini(self, company_facts:str=None, context_y_finance:str=None, context_sec:str=None)->str:
+
+    def store_docs_by_filing_type_list(
+        self, context_docs: pd.DataFrame, redis_client: redis.Redis
+    ) -> None:
+        """
+        Stores each document (with meta) in a Redis list keyed by Filing Type (form).
+        Each Redis key is the filing type, and its value is a list of JSON objects.
+        """
         try:
-            client = AsyncOpenAI()
-
-            completion = await client.chat.completions.create(
-                model="gpt-4o-mini-2024-07-18",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": f'''You are a financial analysis assistant.
-                        Analyze the provided data and determine whether to BUY, HOLD, or SELL the asset.
-
-                        Use the following structure for your analysis:
-
-                        1. Technical Analysis:
-                        - Analyze moving averages (e.g., 20-day vs 50-day SMA).
-                        - Consider the RSI (Relative Strength Index) and what it suggests:
-                        (overbought, oversold, neutral).
-                        - Mention any trend or signal (bullish, bearish, etc.).
-
-                        2. Fundamental Analysis:
-                        - Evaluate key metrics such as P/E ratio, ROE, and EPS.
-                        - Mention if valuation is high/low, earnings performance, and profitability outlook.
-
-                        3. Sentiment Analysis:
-                        - Consider the provided sentiment summary (from news, social media, etc.).
-                        - State whether the market sentiment is positive, negative, or neutral.
-
-                        4. Final Recommendation:
-                        - Clearly state a one-word recommendation: BUY, HOLD, or SELL.
-                        - Briefly justify the decision based on the analysis above.
-                        
-                        5. Meta Data SEC Files:
-                        - List here only the Metadata of the SEC Files not the Content.
-
-                        Here are the company facts:
-                        {company_facts}
-                        
-                        Here is the data from yahoo finance:
-                        {context_y_finance}
-
-                        Here are the key facts from SEC filings:
-                        {context_sec}
-
-                        Respond with the company facts (company name, ..) and then a very brief,
-                        structured explanation followed by the final recommendation in caps lock'''
+            forms_set = set()
+            for idx, row in context_docs.iterrows():
+                filing_type = row.get("form")
+                raw_content = row.get("raw_content")
+                cik = row.get("cik")
+                acc = row.get("accession_number")
+                file = row.get("docs")
+                if filing_type and raw_content:
+                    cached_docs = {
+                        "raw_content": raw_content.decode("utf-8") if isinstance(raw_content, bytes) else str(raw_content),
+                        "cik": str(cik),
+                        "accession": str(acc),
+                        "form": str(filing_type),
+                        "filename": str(file)
                     }
-                ]
-            )
-            
-            result = completion.choices[0].message.content
+                    # Push doc JSON to Redis list at key 'form'
+                    redis_client.rpush(filing_type, json.dumps(cached_docs))
+                    logger.info(f"[REDIS] Appended doc for Filing Type '{filing_type}'")
+                    forms_set.add(filing_type)
+                else:
+                    logger.warning(f"[REDIS] Missing filing_type or content for row {idx}, skipping.")
 
-            return result
-
+            redis_client.set("available_forms", json.dumps(sorted(forms_set)))
+            logger.info(f"[REDIS] Stored all available forms: {sorted(forms_set)}")
         except Exception as e:
-            return f"Unexpected error: {e}"        
+            logger.error(f"[REDIS ERROR] {e}")
+            raise
 
 
-    async def deepseek_r1_broker_analysis(self, company_facts:str=None, context_y_finance:str=None, context_sec:str=None)->str:
+    def get_first_available_form_content(
+        self, redis_client: redis.Redis, form_rank: list
+    ) -> tuple:
+        """
+        Returns (form, doc_dict) for the highest-priority form available in Redis.
+        Only returns the first (oldest) document stored for that form.
+        If no form is found, returns (None, None).
+        """
+        for form in form_rank:
+            docs_json = redis_client.lrange(form, 0, 0)  # Only get the first one
+            if docs_json:
+                item = docs_json[0]
+                try:
+                    if isinstance(item, bytes):
+                        item = item.decode("utf-8")
+                    doc = json.loads(item)
+                except Exception as e:
+                    logger.warning(f"[REDIS] Could not decode item for {form}: {e}")
+                    doc = {"raw_content": item}
+                return form, doc
+        return None, None
+        
+    import json
+
+    def get_all_docs_from_redis(self, redis_client):
+        # 1. Get available forms
+        forms_json = redis_client.get('available_forms')
+        forms = json.loads(forms_json) if forms_json else []
+        
+        all_docs = {}
+        for form in forms:
+            # 2. Fetch all docs for this form (stored as JSON strings)
+            docs = redis_client.lrange(form, 0, -1)
+            # 3. Parse JSON for each doc
+            docs_parsed = [json.loads(doc) for doc in docs]
+            all_docs[form] = docs_parsed
+
+        return all_docs
+
+
+
+    async def deepseek_r1_broker_analysis(
+        self,  
+        context_y_finance: str = None, 
+        context_sec: str = None,
+        forecast_yf: str = None
+    ) -> BrokerAnalysisOutput:
         try:
+            # 1. Create parser for your schema
+            parser = PydanticOutputParser(pydantic_object=BrokerAnalysisOutput)
+            format_instructions = parser.get_format_instructions()
+
+            # 2. Compose prompt with format instructions
+            user_prompt = f"""
+    You are a financial analysis assistant.
+    Analyze the provided data and determine whether to BUY, HOLD, or SELL the asset.
+
+    Your response MUST follow this format:
+    {format_instructions}
+
+    Here are the company facts:
+    {context_y_finance}
+
+    Here are the key facts from SEC filing:
+    {context_sec}
+
+    Here is a forecast of the stock:
+    {forecast_yf}
+
+    Instructions:
+    1. Use the SEC files for risk analysis. 
+    2. Use the forecast for your decisison.
+    3. Use news in the facts about the company for your sentiment analysis.
+    4. Identify if there are some risks according to the Form of the SEC filing. 
+    5. Mention all your decisions from the instructions in the analysis.
+    """
             HEADERS = {
                 'Authorization': f"Bearer {os.environ.get('DEEPSEEK_API_KEY')}",
                 'Content-Type': 'application/json',
@@ -226,45 +283,7 @@ class RAG_Chatbot:
 
             data = {
                 'model': 'deepseek-chat',
-                'messages': [
-                    {'role': 'user', 'content': f'''You are a financial analysis assistant.
-                    Analyze the provided data and determine whether to BUY, HOLD, or SELL the asset.
-
-                    Use the following structure for your analysis:
-
-                    1. Technical Analysis:
-                    - Analyze moving averages (e.g., 20-day vs 50-day SMA).
-                    - Consider the RSI (Relative Strength Index) and what it suggests: 
-                    (overbought, oversold, neutral).
-                    - Mention any trend or signal (bullish, bearish, etc.).
-
-                    2. Fundamental Analysis:
-                    - Evaluate key metrics such as P/E ratio, ROE, and EPS.
-                    - Mention if valuation is high/low, earnings performance, and profitability outlook.
-
-                    3. Sentiment Analysis:
-                    - Consider the provided sentiment summary (from news, social media, etc.).
-                    - State whether the market sentiment is positive, negative, or neutral.
-
-                    4. Final Recommendation:
-                    - Clearly state a one-word recommendation: BUY, HOLD, or SELL.
-                    - Briefly justify the decision based on the analysis above.
-                    
-                    5. Meta Data SEC Files:
-                        - List here only the Metadata of the SEC Files not the Content.
-                    
-                    Here are the company facts:
-                    {company_facts}
-                    
-                    Here is the data from yahoo finance:
-                    {context_y_finance}
-
-                    Here are the key facts from SEC filings:
-                    {context_sec}
-
-                    Respond with the company facts (company name, ..) and then a very brief,
-                    structured explanation followed by the final recommendation in caps lock'''}
-                ],
+                'messages': [{'role': 'user', 'content': user_prompt}],
                 'stream': False
             }
             logger.debug(json.dumps(data, indent=2))
@@ -277,10 +296,21 @@ class RAG_Chatbot:
                 response.raise_for_status()
                 result = response.json()
 
-            return result['choices'][0]['message']['content']
+            content = result['choices'][0]['message']['content']
 
-        except httpx.RequestError as e:
-            return f"Request error: {e}"
+            # Remove code fences if needed
+            if content.strip().startswith("```json"):
+                content = content.strip().removeprefix("```json").removesuffix("```").strip()
+            elif content.strip().startswith("```"):
+                content = content.strip().removeprefix("```").removesuffix("```").strip()
+
+            # 3. Parse the output using the parser
+            parsed = parser.parse(content)
+
+            return parsed
+
         except Exception as e:
-            return f"Unexpected error: {e}"
+            logger.error(f"[deepseek_r1_broker_analysis ERROR] {e}")
+            raise
 
+    
