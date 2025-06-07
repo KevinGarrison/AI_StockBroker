@@ -101,7 +101,6 @@ class RAG_Chatbot:
             markdown_splitter = MarkdownTextSplitter(chunk_size=10000, chunk_overlap=0)
             token_splitter = TokenTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
-            # Find the first document that matches the ranking
             doc_row = None
             for form in sec_form_rank:
                 filtered = context_docs[context_docs['form'] == form]
@@ -186,7 +185,6 @@ class RAG_Chatbot:
                         "form": str(filing_type),
                         "filename": str(file)
                     }
-                    # Push doc JSON to Redis list at key 'form'
                     redis_client.rpush(filing_type, json.dumps(cached_docs))
                     logger.info(f"[REDIS] Appended doc for Filing Type '{filing_type}'")
                     forms_set.add(filing_type)
@@ -209,7 +207,7 @@ class RAG_Chatbot:
         If no form is found, returns (None, None).
         """
         for form in form_rank:
-            docs_json = redis_client.lrange(form, 0, 0)  # Only get the first one
+            docs_json = redis_client.lrange(form, 0, 0)  
             if docs_json:
                 item = docs_json[0]
                 try:
@@ -225,15 +223,12 @@ class RAG_Chatbot:
     import json
 
     def get_all_docs_from_redis(self, redis_client):
-        # 1. Get available forms
         forms_json = redis_client.get('available_forms')
         forms = json.loads(forms_json) if forms_json else []
         
         all_docs = {}
         for form in forms:
-            # 2. Fetch all docs for this form (stored as JSON strings)
             docs = redis_client.lrange(form, 0, -1)
-            # 3. Parse JSON for each doc
             docs_parsed = [json.loads(doc) for doc in docs]
             all_docs[form] = docs_parsed
 
@@ -248,11 +243,9 @@ class RAG_Chatbot:
         forecast_yf: str = None
     ) -> BrokerAnalysisOutput:
         try:
-            # 1. Create parser for your schema
             parser = PydanticOutputParser(pydantic_object=BrokerAnalysisOutput)
             format_instructions = parser.get_format_instructions()
 
-            # 2. Compose prompt with format instructions
             user_prompt = f"""
     You are a financial analysis assistant.
     Analyze the provided data and determine whether to BUY, HOLD, or SELL the asset.
@@ -298,13 +291,11 @@ class RAG_Chatbot:
 
             content = result['choices'][0]['message']['content']
 
-            # Remove code fences if needed
             if content.strip().startswith("```json"):
                 content = content.strip().removeprefix("```json").removesuffix("```").strip()
             elif content.strip().startswith("```"):
                 content = content.strip().removeprefix("```").removesuffix("```").strip()
 
-            # 3. Parse the output using the parser
             parsed = parser.parse(content)
 
             return parsed
