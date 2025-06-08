@@ -103,8 +103,9 @@ async def process_and_get_most_relevant_files(
 
 
     context_yf = str(yf_stock_data)
+    
 
-    final_broker_analysis = await rag_bot.deepseek_r1_broker_analysis(
+    final_broker_analysis = await rag_bot.gpt4o_broker_analysis(
         context_y_finance=str(context_yf),
         context_sec=str(sec_result_formatted)[:10000],
         forecast_yf = str(forecast)

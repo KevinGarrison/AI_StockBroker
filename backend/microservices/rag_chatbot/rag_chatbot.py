@@ -17,7 +17,7 @@ import logging
 import warnings
 import pandas as pd
 import redis
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -234,19 +234,18 @@ class RAG_Chatbot:
 
         return all_docs
 
+    
+    async def gpt4o_broker_analysis(
+            self,
+            context_y_finance: str = None,
+            context_sec: str = None,
+            forecast_yf: str = None
+        ) -> BrokerAnalysisOutput:
+            try:
+                parser = PydanticOutputParser(pydantic_object=BrokerAnalysisOutput)
+                format_instructions = parser.get_format_instructions()
 
-
-    async def deepseek_r1_broker_analysis(
-        self,  
-        context_y_finance: str = None, 
-        context_sec: str = None,
-        forecast_yf: str = None
-    ) -> BrokerAnalysisOutput:
-        try:
-            parser = PydanticOutputParser(pydantic_object=BrokerAnalysisOutput)
-            format_instructions = parser.get_format_instructions()
-
-            user_prompt = f"""
+                user_prompt = f"""
     You are a financial analysis assistant.
     Analyze the provided data and determine whether to BUY, HOLD, or SELL the asset.
 
@@ -269,39 +268,34 @@ class RAG_Chatbot:
     4. Identify if there are some risks according to the Form of the SEC filing. 
     5. Mention all your decisions from the instructions in the analysis.
     """
-            HEADERS = {
-                'Authorization': f"Bearer {os.environ.get('DEEPSEEK_API_KEY')}",
-                'Content-Type': 'application/json',
-            }
-
-            data = {
-                'model': 'deepseek-chat',
-                'messages': [{'role': 'user', 'content': user_prompt}],
-                'stream': False
-            }
-            logger.debug(json.dumps(data, indent=2))
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
-                    "https://api.deepseek.com/chat/completions",
-                    headers=HEADERS,
-                    data=json.dumps(data)
+                openai_client = AsyncOpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
+                response = await openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.2,  # low temp for deterministic output
+                    max_tokens=1024,
+                    response_format={"type": "json_object"},
                 )
-                response.raise_for_status()
-                result = response.json()
 
-            content = result['choices'][0]['message']['content']
+                content = response.choices[0].message.content
 
-            if content.strip().startswith("```json"):
-                content = content.strip().removeprefix("```json").removesuffix("```").strip()
-            elif content.strip().startswith("```"):
-                content = content.strip().removeprefix("```").removesuffix("```").strip()
+                # If the model returns a markdown block, strip it
+                if content.strip().startswith("```json"):
+                    content = content.strip().removeprefix("```json").removesuffix("```").strip()
+                elif content.strip().startswith("```"):
+                    content = content.strip().removeprefix("```").removesuffix("```").strip()
 
-            parsed = parser.parse(content)
+                parsed = parser.parse(content)
 
-            return parsed
+                return parsed
 
-        except Exception as e:
-            logger.error(f"[deepseek_r1_broker_analysis ERROR] {e}")
-            raise
+            except ValidationError as ve:
+                logger.error(f"[gpt4o_broker_analysis PARSING ERROR] {ve}")
+                raise
+            except Exception as e:
+                logger.error(f"[gpt4o_broker_analysis ERROR] {e}")
+                raise
 
-    
+        
