@@ -77,6 +77,7 @@ class RAG_Chatbot:
         except Exception as e:
             logger.error(f"[Qdrant ERROR] Couldn't delete collection: {e}")
     
+
     def delete_cached_docs(self, client: redis.Redis):
         try:
             client.flushdb()
@@ -153,7 +154,6 @@ class RAG_Chatbot:
             raise
 
     
-    
     def query_qdrant(self, prompt: str, vector_store:QdrantVectorStore) -> Document:
         try:
             return vector_store.similarity_search(prompt, k=4)
@@ -220,7 +220,6 @@ class RAG_Chatbot:
                 return form, doc
         return None, None
         
-    import json
 
     def get_all_docs_from_redis(self, redis_client):
         forms_json = redis_client.get('available_forms')
@@ -234,7 +233,7 @@ class RAG_Chatbot:
 
         return all_docs
 
-    
+
     async def gpt4o_broker_analysis(
             self,
             context_y_finance: str = None,
