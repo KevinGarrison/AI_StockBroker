@@ -30,10 +30,12 @@ warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 load_dotenv()
 
+
 class SecMetaData(BaseModel):
     file_name: str
     file_date: str
     file_type: str
+
 
 class BrokerAnalysisOutput(BaseModel):
     company_name: str
@@ -45,13 +47,13 @@ class BrokerAnalysisOutput(BaseModel):
     justification: str
     sec_metadata: List[SecMetaData]
 
+
 @dataclass
 class RAG_Chatbot:
-    
     def connect_to_qdrant(self, host: str = None, port: str = None) -> QdrantClient:
         try:
-            host = str(host or os.getenv('QDRANT_HOST'))
-            port = int(port or os.getenv('QDRANT_PORT'))
+            host = str(host or os.getenv("QDRANT_HOST"))
+            port = int(port or os.getenv("QDRANT_PORT"))
             client = QdrantClient(host=host, port=port)
             logger.info(f"[Qdrant] Connected to {host}:{port}")
             return client
@@ -59,29 +61,28 @@ class RAG_Chatbot:
             logger.error(f"[Qdrant ERROR] Connection failed: {e}")
             raise
 
-
-    def connect_to_redis(self, host: str = None, port: int = None, db: int = 0, password: str = None) -> redis.Redis:
+    def connect_to_redis(
+        self, host: str = None, port: int = None, db: int = 0, password: str = None
+    ) -> redis.Redis:
         try:
-            host = host or os.getenv('REDIS_HOST')
-            port = int(port or os.getenv('REDIS_PORT', 6379))
+            host = host or os.getenv("REDIS_HOST")
+            port = int(port or os.getenv("REDIS_PORT", 6379))
 
             client = redis.Redis(host=host, port=port, db=db)
-            client.ping() 
+            client.ping()
             logger.info(f"[Redis] Connected to {host}:{port} (db={db})")
             return client
         except Exception as e:
             logger.error(f"[Redis ERROR] Connection failed: {e}")
             raise
 
-
     def delete_vec_docs(self, client: QdrantClient, collection_name: str = None):
         try:
-            collection_name = collection_name or os.getenv('COLLECTION_NAME')
+            collection_name = collection_name or os.getenv("COLLECTION_NAME")
             client.delete_collection(collection_name=collection_name)
             logger.info(f"[Qdrant] Deleted collection '{collection_name}'")
         except Exception as e:
             logger.error(f"[Qdrant ERROR] Couldn't delete collection: {e}")
-    
 
     def delete_cached_docs(self, client: redis.Redis):
         try:
@@ -89,7 +90,6 @@ class RAG_Chatbot:
             logger.info("[Redis] Deleted cache")
         except Exception as e:
             logger.error(f"[Redis ERROR] Couldn't delete collection: {e}")
-    
 
     def process_most_important_form_to_qdrant(
         self,
@@ -101,28 +101,36 @@ class RAG_Chatbot:
         Only store the single most important doc (by sec_form_rank) in Qdrant.
         """
         try:
-            collection_name = os.getenv('COLLECTION_NAME')
-            chunk_size = int(os.getenv('CHUNK_SIZE', 3500))
-            chunk_overlap = int(os.getenv('OVERLAP_SIZE', 200))
+            collection_name = os.getenv("COLLECTION_NAME")
+            chunk_size = int(os.getenv("CHUNK_SIZE", 3500))
+            chunk_overlap = int(os.getenv("OVERLAP_SIZE", 200))
             markdown_splitter = MarkdownTextSplitter(chunk_size=10000, chunk_overlap=0)
-            token_splitter = TokenTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+            token_splitter = TokenTextSplitter(
+                chunk_size=chunk_size, chunk_overlap=chunk_overlap
+            )
 
             doc_row = None
             for form in sec_form_rank:
-                filtered = context_docs[context_docs['form'] == form]
+                filtered = context_docs[context_docs["form"] == form]
                 if not filtered.empty:
                     doc_row = filtered.iloc[0]
                     break
 
             if doc_row is not None:
                 content = doc_row.get("content")
-                metadata = {k: v for k, v in doc_row.items() if k != "content" and k != "raw_content"}
+                metadata = {
+                    k: v
+                    for k, v in doc_row.items()
+                    if k != "content" and k != "raw_content"
+                }
                 documents = []
                 markdown_chunks = markdown_splitter.split_text(str(content))
                 for md_chunk in markdown_chunks:
                     token_chunks = token_splitter.split_text(md_chunk)
                     for chunk in token_chunks:
-                        documents.append(Document(page_content=chunk, metadata=metadata))
+                        documents.append(
+                            Document(page_content=chunk, metadata=metadata)
+                        )
 
                 if not documents:
                     logger.warning("[Qdrant] No documents to add — skipping.")
@@ -137,7 +145,9 @@ class RAG_Chatbot:
                     vector_size = int(os.getenv("VECTOR_SIZE", 3072))
                     qdrant_client.create_collection(
                         collection_name=collection_name,
-                        vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE)
+                        vectors_config=VectorParams(
+                            size=vector_size, distance=Distance.COSINE
+                        ),
                     )
                     logger.info(f"[Qdrant] Created collection '{collection_name}'")
 
@@ -145,10 +155,12 @@ class RAG_Chatbot:
                     host=os.getenv("QDRANT_HOST"),
                     port=int(os.getenv("QDRANT_PORT")),
                     embedding=embeddings,
-                    collection_name=collection_name
+                    collection_name=collection_name,
                 )
                 vector_store.add_documents(documents=documents, ids=uuids)
-                logger.info(f"[Qdrant] Stored {len(documents)} document chunks in '{collection_name}'")
+                logger.info(
+                    f"[Qdrant] Stored {len(documents)} document chunks in '{collection_name}'"
+                )
                 return vector_store
             else:
                 logger.warning("[Qdrant] No ranked form found in docs.")
@@ -158,14 +170,12 @@ class RAG_Chatbot:
             logger.error(f"[Qdrant ERROR] {e}")
             raise
 
-    
-    def query_qdrant(self, prompt: str, vector_store:QdrantVectorStore) -> Document:
+    def query_qdrant(self, prompt: str, vector_store: QdrantVectorStore) -> Document:
         try:
             return vector_store.similarity_search(prompt, k=4)
         except Exception as e:
             logger.error(f"[Qdrant ERROR] {e}")
-            return [] 
-
+            return []
 
     def store_docs_by_filing_type_list(
         self, context_docs: pd.DataFrame, redis_client: redis.Redis
@@ -184,24 +194,27 @@ class RAG_Chatbot:
                 file = row.get("docs")
                 if filing_type and raw_content:
                     cached_docs = {
-                        "raw_content": raw_content.decode("utf-8") if isinstance(raw_content, bytes) else str(raw_content),
+                        "raw_content": raw_content.decode("utf-8")
+                        if isinstance(raw_content, bytes)
+                        else str(raw_content),
                         "cik": str(cik),
                         "accession": str(acc),
                         "form": str(filing_type),
-                        "filename": str(file)
+                        "filename": str(file),
                     }
                     redis_client.rpush(filing_type, json.dumps(cached_docs))
                     logger.info(f"[REDIS] Appended doc for Filing Type '{filing_type}'")
                     forms_set.add(filing_type)
                 else:
-                    logger.warning(f"[REDIS] Missing filing_type or content for row {idx}, skipping.")
+                    logger.warning(
+                        f"[REDIS] Missing filing_type or content for row {idx}, skipping."
+                    )
 
             redis_client.set("available_forms", json.dumps(sorted(forms_set)))
             logger.info(f"[REDIS] Stored all available forms: {sorted(forms_set)}")
         except Exception as e:
             logger.error(f"[REDIS ERROR] {e}")
             raise
-
 
     def get_first_available_form_content(
         self, redis_client: redis.Redis, form_rank: list
@@ -212,7 +225,7 @@ class RAG_Chatbot:
         If no form is found, returns (None, None).
         """
         for form in form_rank:
-            docs_json = redis_client.lrange(form, 0, 0)  
+            docs_json = redis_client.lrange(form, 0, 0)
             if docs_json:
                 item = docs_json[0]
                 try:
@@ -224,12 +237,11 @@ class RAG_Chatbot:
                     doc = {"raw_content": item}
                 return form, doc
         return None, None
-        
 
     def get_all_docs_from_redis(self, redis_client):
-        forms_json = redis_client.get('available_forms')
+        forms_json = redis_client.get("available_forms")
         forms = json.loads(forms_json) if forms_json else []
-        
+
         all_docs = {}
         for form in forms:
             docs = redis_client.lrange(form, 0, -1)
@@ -240,36 +252,50 @@ class RAG_Chatbot:
 
 
     def download_referenz_doc_from_redis(self, client: redis.Redis):
-        forms_json = client.get('available_forms')
-        forms = json.loads(forms_json) if forms_json else []
-        
+        ticker = client.get("ticker")
+        ticker = ticker.decode("utf-8") if ticker else "UNKNOWN"
+
+        forms_json = client.get("available_forms")
+        try:
+            forms = json.loads(forms_json.decode("utf-8")) if forms_json else []
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=500, detail="Invalid JSON in 'available_forms'"
+            )
+
         if not forms:
             raise HTTPException(status_code=404, detail="No forms found")
-        
-        first_form = forms[0] 
+
+        first_form = forms[0]
         docs = client.lrange(first_form, 0, -1)
-        
+
         if not docs:
-            raise HTTPException(status_code=404, detail="No documents found for first form")
-        
-        doc_json = docs[0]  
-        doc_obj = json.loads(doc_json)
+            raise HTTPException(
+                status_code=404, detail="No documents found for first form"
+            )
+
+        doc_obj = json.loads(docs[0])
         raw_html = doc_obj.get("raw_content")
-        
+
         if not raw_html:
-            raise HTTPException(status_code=404, detail="No raw_content found in document")
-        
-        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".htm", mode="w", encoding="utf-8")
-        tmp_file.write(raw_html)
-        tmp_file.close()
-        
-        return tmp_file.name, f"{first_form}_0.htm"
-    
+            raise HTTPException(
+                status_code=404, detail="No raw_content found in document"
+            )
+
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=".htm", mode="w", encoding="utf-8"
+        ) as tmp_file:
+            tmp_file.write(raw_html)
+            file_path = tmp_file.name
+
+        return file_path, f"{ticker}_{first_form}_sec_report.htm"
 
     def generate_broker_analysis_pdf(self, data: dict, ticker: str) -> str:
-        logo_path = None  
+        logo_path = None
         try:
-            response = requests.get(f"http://api-gateway:8000/get-logo/{ticker}", timeout=20)
+            response = requests.get(
+                f"http://api-gateway:8000/get-logo/{ticker}", timeout=20
+            )
             if response.status_code == 200:
                 tmp_logo = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
                 tmp_logo.write(response.content)
@@ -287,7 +313,13 @@ class RAG_Chatbot:
                 self.set_y(10)
                 self.set_text_color(0, 0, 0)
                 self.set_font("Times", "B", 24)
-                self.cell(0, 14, f"{data.get('company_name', 'Company')} - Broker Analysis", ln=True, align="C")
+                self.cell(
+                    0,
+                    14,
+                    f"{data.get('company_name', 'Company')} - Broker Analysis",
+                    ln=True,
+                    align="C",
+                )
                 self.ln(5)
 
             def chapter_title(self, title):
@@ -309,7 +341,6 @@ class RAG_Chatbot:
                 self.set_text_color(50, 50, 50)
                 self.multi_cell(0, 6, text)
                 self.ln(2)
-
 
         pdf = PDF()
         pdf.set_auto_page_break(auto=True, margin=15)
@@ -344,20 +375,17 @@ class RAG_Chatbot:
 
         return tmp_file.name
 
-
-
-
     async def gpt4o_broker_analysis(
-            self,
-            context_y_finance: str = None,
-            context_sec: str = None,
-            forecast_yf: str = None
-        ) -> BrokerAnalysisOutput:
-            try:
-                parser = PydanticOutputParser(pydantic_object=BrokerAnalysisOutput)
-                format_instructions = parser.get_format_instructions()
+        self,
+        context_y_finance: str = None,
+        context_sec: str = None,
+        forecast_yf: str = None,
+    ) -> BrokerAnalysisOutput:
+        try:
+            parser = PydanticOutputParser(pydantic_object=BrokerAnalysisOutput)
+            format_instructions = parser.get_format_instructions()
 
-                user_prompt = f"""
+            user_prompt = f"""
     You are a financial analysis assistant.
     Analyze the provided data and determine whether to BUY, HOLD, or SELL the asset.
 
@@ -380,34 +408,34 @@ class RAG_Chatbot:
     4. Identify if there are some risks according to the Form of the SEC filing. 
     5. Mention all your decisions from the instructions in the analysis.
     """
-                openai_client = AsyncOpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
-                response = await openai_client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[
-                        {"role": "user", "content": user_prompt}
-                    ],
-                    temperature=0.2,  # low temp for deterministic output
-                    max_tokens=1024,
-                    response_format={"type": "json_object"},
+            openai_client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+            response = await openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": user_prompt}],
+                temperature=0.2,  # low temp for deterministic output
+                max_tokens=1024,
+                response_format={"type": "json_object"},
+            )
+
+            content = response.choices[0].message.content
+
+            # If the model returns a markdown block, strip it
+            if content.strip().startswith("```json"):
+                content = (
+                    content.strip().removeprefix("```json").removesuffix("```").strip()
+                )
+            elif content.strip().startswith("```"):
+                content = (
+                    content.strip().removeprefix("```").removesuffix("```").strip()
                 )
 
-                content = response.choices[0].message.content
+            parsed = parser.parse(content)
 
-                # If the model returns a markdown block, strip it
-                if content.strip().startswith("```json"):
-                    content = content.strip().removeprefix("```json").removesuffix("```").strip()
-                elif content.strip().startswith("```"):
-                    content = content.strip().removeprefix("```").removesuffix("```").strip()
+            return parsed
 
-                parsed = parser.parse(content)
-
-                return parsed
-
-            except ValidationError as ve:
-                logger.error(f"[gpt4o_broker_analysis PARSING ERROR] {ve}")
-                raise
-            except Exception as e:
-                logger.error(f"[gpt4o_broker_analysis ERROR] {e}")
-                raise
-
-        
+        except ValidationError as ve:
+            logger.error(f"[gpt4o_broker_analysis PARSING ERROR] {ve}")
+            raise
+        except Exception as e:
+            logger.error(f"[gpt4o_broker_analysis ERROR] {e}")
+            raise

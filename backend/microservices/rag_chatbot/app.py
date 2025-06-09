@@ -1,6 +1,6 @@
 from rag_chatbot import RAG_Chatbot
 from fastapi import FastAPI, HTTPException, Body
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
@@ -11,6 +11,9 @@ import time
 import pandas as pd
 import json
 import os
+import io
+from weasyprint import HTML
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -118,6 +121,7 @@ async def process_and_get_most_relevant_files(
     redis_client = redis_db["client"]
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, redis_client.set, "broker_analysis", analysis_json)
+    await loop.run_in_executor(None, redis_client.set, "ticker", ticker)
 
     return JSONResponse(content=encoded, status_code=200)
 
@@ -135,6 +139,23 @@ async def get_reference_files():
     except Exception as e:
         logger.error(f"[REDIS ERROR] Failed to fetch reference docs - {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve documents from Redis.")
+
+@app.get("/reference-doc-pdf")
+def reference_doc_pdf():
+    client = redis_db["client"]
+
+    html_file_path, base_filename = rag_bot.download_referenz_doc_from_redis(client)
+    
+    pdf_io = io.BytesIO()
+    HTML(filename=html_file_path).write_pdf(pdf_io)
+    pdf_io.seek(0)
+
+    pdf_filename = base_filename.replace('.htm', '.pdf')
+    return StreamingResponse(
+        pdf_io,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={pdf_filename}"}
+    )
 
 @app.get("/download-refdoc-redis")
 def download_refdoc_endpoint():

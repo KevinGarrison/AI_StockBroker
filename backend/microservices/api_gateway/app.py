@@ -101,6 +101,21 @@ async def download_reference_doc():
         return Response(content=resp.content, headers=headers, media_type=headers["Content-Type"])
 
 
+@app.get("/download-reference-doc-pdf")
+async def download_reference_doc_pdf():
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "http://rag-chatbot:8002/reference-doc-pdf", timeout=None
+        )
+        headers = {
+            "Content-Disposition": resp.headers.get(
+                "content-disposition", "attachment; filename=reference.pdf"
+            ),
+            "Content-Type": resp.headers.get("content-type", "application/pdf"),
+        }
+        return Response(content=resp.content, headers=headers, media_type=headers["Content-Type"])
+
+
 @app.get("/download-broker-pdf/{ticker}")
 async def download_broker_pdf(ticker:str):
     async with httpx.AsyncClient() as client:
