@@ -1,11 +1,15 @@
 from api_data_fetcher import API_Fetcher
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Query, HTTPException
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.encoders import jsonable_encoder
 import yfinance as yf
 import logging
 import json
 import httpx
+import tempfile
+import os
+
+
 
 logging.basicConfig(
     level=logging.INFO, 
@@ -66,6 +70,21 @@ async def company_news_selected_ticker(ticker: str):
     context = await fetcher.get_company_news(ticker)
     encoded = jsonable_encoder(context)
     return JSONResponse(content=encoded, status_code=200)
+
+@app.get("/get-logo/{ticker}")
+def get_logo(ticker: str):
+    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    logo_path = fetcher.fetch_logo(ticker, tmp_file.name)
+
+    if not logo_path or not os.path.exists(logo_path):
+        raise HTTPException(status_code=404, detail="Logo not found or company website missing")
+
+    return FileResponse(
+        path=logo_path,
+        media_type="image/png",
+        filename=f"{ticker}_logo.png",
+        background=lambda: os.remove(logo_path)
+    )
 
 
 

@@ -1,4 +1,6 @@
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import Response
+import httpx
 import logging
 import httpx
 
@@ -97,6 +99,54 @@ async def download_reference_doc():
             "Content-Type": resp.headers.get("content-type", "text/html"),
         }
         return Response(content=resp.content, headers=headers, media_type=headers["Content-Type"])
+
+
+@app.get("/download-broker-pdf/{ticker}")
+async def download_broker_pdf(ticker:str):
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"http://rag-chatbot:8002/download-broker-pdf/{ticker}", timeout=None
+        )
+
+        if resp.status_code != 200:
+            return Response(content=resp.text, status_code=resp.status_code)
+
+        headers = {
+            "Content-Disposition": resp.headers.get(
+                "content-disposition", "attachment; filename=broker_analysis.pdf"
+            ),
+            "Content-Type": resp.headers.get("content-type", "application/pdf"),
+        }
+
+        return Response(content=resp.content, headers=headers, media_type=headers["Content-Type"])
+
+
+@app.get("/get-logo/{ticker}")
+async def proxy_logo(ticker: str):
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"http://api-fetcher:8001/get-logo/{ticker}", timeout=20)
+
+        if response.status_code != 200:
+            try:
+                detail = response.json().get("detail", "Logo not found")
+            except Exception:
+                detail = response.text or "Logo not found"
+            raise HTTPException(status_code=response.status_code, detail=detail)
+
+        return Response(
+            content=response.content,
+            media_type="image/png",
+            headers={
+                "Content-Disposition": f"inline; filename={ticker}_logo.png"
+            }
+        )
+    except HTTPException as e:
+        raise e 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch logo: {str(e)}")
+
+
 
 
 @app.get("/forecast/{ticker}")

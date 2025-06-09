@@ -21,6 +21,8 @@ from pydantic import BaseModel, ValidationError
 from typing import List, Optional
 import tempfile
 from fastapi import HTTPException
+from fpdf import FPDF
+import requests
 
 
 logger = logging.getLogger(__name__)
@@ -262,6 +264,87 @@ class RAG_Chatbot:
         tmp_file.close()
         
         return tmp_file.name, f"{first_form}_0.htm"
+    
+
+    def generate_broker_analysis_pdf(self, data: dict, ticker: str) -> str:
+        logo_path = None  
+        try:
+            response = requests.get(f"http://api-gateway:8000/get-logo/{ticker}", timeout=20)
+            if response.status_code == 200:
+                tmp_logo = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                tmp_logo.write(response.content)
+                tmp_logo.close()
+                logo_path = tmp_logo.name
+        except Exception as e:
+            print(f"Logo fetch failed for {ticker}: {e}")
+
+        class PDF(FPDF):
+            def __init__(self):
+                super().__init__()
+                self.logo_inserted = False
+
+            def header(self):
+                self.set_y(10)
+                self.set_text_color(0, 0, 0)
+                self.set_font("Times", "B", 24)
+                self.cell(0, 14, f"{data.get('company_name', 'Company')} - Broker Analysis", ln=True, align="C")
+                self.ln(5)
+
+            def chapter_title(self, title):
+                if not self.logo_inserted and logo_path and os.path.exists(logo_path):
+                    logo_width = 20
+                    x_center = (self.w - logo_width) / 2
+                    self.image(logo_path, x=x_center, y=self.get_y(), w=logo_width)
+                    self.ln(30)
+                    self.logo_inserted = True
+
+                self.set_fill_color(230, 230, 250)
+                self.set_text_color(0, 0, 0)
+                self.set_font("Times", "B", 14)
+                self.ln(4)
+                self.cell(0, 8, title, ln=True, fill=True)
+
+            def chapter_body(self, text):
+                self.set_font("Times", "", 11)
+                self.set_text_color(50, 50, 50)
+                self.multi_cell(0, 6, text)
+                self.ln(2)
+
+
+        pdf = PDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+
+        sections = {
+            "Technical Analysis": data.get("technical_analysis", ""),
+            "Fundamental Analysis": data.get("fundamental_analysis", ""),
+            "Sentiment Analysis": data.get("sentiment_analysis", ""),
+            "Risks (SEC Files)": data.get("risks_sec_files", ""),
+            "Final Recommendation": f"{data.get('final_recommendation', '')} - {data.get('justification', '')}",
+        }
+
+        sec_meta = data.get("sec_metadata", [])
+        if sec_meta:
+            meta_text = ", ".join(
+                f"File: {meta.get('file_name')}, Date: {meta.get('file_date')}, Type: {meta.get('file_type')}"
+                for meta in sec_meta
+            )
+            sections["SEC Metadata"] = meta_text
+
+        for title, content in sections.items():
+            pdf.chapter_title(title)
+            pdf.chapter_body(content)
+
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        pdf.output(tmp_file.name)
+        tmp_file.close()
+
+        if logo_path and os.path.exists(logo_path):
+            os.remove(logo_path)
+
+        return tmp_file.name
+
+
 
 
     async def gpt4o_broker_analysis(

@@ -10,6 +10,7 @@ import asyncio
 import time
 import pandas as pd
 import json
+import os
 
 logging.basicConfig(
     level=logging.INFO,
@@ -112,6 +113,12 @@ async def process_and_get_most_relevant_files(
     )
 
     encoded = jsonable_encoder(final_broker_analysis)
+
+    analysis_json = json.dumps(encoded)
+    redis_client = redis_db["client"]
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, redis_client.set, "broker_analysis", analysis_json)
+
     return JSONResponse(content=encoded, status_code=200)
 
 
@@ -133,7 +140,34 @@ async def get_reference_files():
 def download_refdoc_endpoint():
     client = redis_db["client"]
     file_path, filename = rag_bot.download_referenz_doc_from_redis(client)
-    return FileResponse(file_path, filename=filename, media_type="text/html")
+
+    return FileResponse(
+        path=file_path,
+        filename=filename,
+        media_type="text/html",
+        background=lambda: os.remove(file_path) 
+    )
+
+@app.get("/download-broker-pdf/{ticker}")
+def download_broker_pdf(ticker:str):
+    redis_client = redis_db["client"]
+    json_str = redis_client.get("broker_analysis")
+    if not json_str:
+        raise HTTPException(status_code=404, detail="No broker analysis found in Redis")
+
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Invalid JSON format in Redis")
+
+    pdf_path = rag_bot.generate_broker_analysis_pdf(data=data, ticker=ticker)
+
+    return FileResponse(
+        path=pdf_path,
+        filename="broker_analysis.pdf",
+        media_type="application/pdf",
+        background=lambda: os.remove(pdf_path)
+    )
 
     
 @app.get("/delete-cached-docs")

@@ -18,6 +18,8 @@ import logging
 import warnings
 import time
 import numpy as np
+from urllib.parse import urlparse
+import requests
 
 
 logger = logging.getLogger(__name__)
@@ -497,5 +499,23 @@ class API_Fetcher:
                 if cap >= min_market_cap:
                     filtered.append(symbol)
         return filtered
+
+
+    def fetch_logo(self, ticker_symbol: str, save_path: str = "logo.png"):
+        ticker = yf.Ticker(ticker_symbol)
+        website = ticker.info.get("website")
+        if not website:
+            return None
+
+        domain = urlparse(website).netloc
+        logo_url = f"https://logo.clearbit.com/{domain}"
+
+
+        response = requests.get(logo_url, timeout=20)
+        if response.status_code == 200:
+            with open(save_path, "wb") as f:
+                f.write(response.content)
+            return save_path
+        return None
 
 
