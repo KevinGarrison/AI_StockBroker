@@ -19,6 +19,9 @@ import pandas as pd
 import redis
 from pydantic import BaseModel, ValidationError
 from typing import List, Optional
+import tempfile
+from fastapi import HTTPException
+
 
 logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
@@ -84,7 +87,7 @@ class RAG_Chatbot:
             logger.info("[Redis] Deleted cache")
         except Exception as e:
             logger.error(f"[Redis ERROR] Couldn't delete collection: {e}")
-
+    
 
     def process_most_important_form_to_qdrant(
         self,
@@ -232,6 +235,33 @@ class RAG_Chatbot:
             all_docs[form] = docs_parsed
 
         return all_docs
+
+
+    def download_referenz_doc_from_redis(self, client: redis.Redis):
+        forms_json = client.get('available_forms')
+        forms = json.loads(forms_json) if forms_json else []
+        
+        if not forms:
+            raise HTTPException(status_code=404, detail="No forms found")
+        
+        first_form = forms[0] 
+        docs = client.lrange(first_form, 0, -1)
+        
+        if not docs:
+            raise HTTPException(status_code=404, detail="No documents found for first form")
+        
+        doc_json = docs[0]  
+        doc_obj = json.loads(doc_json)
+        raw_html = doc_obj.get("raw_content")
+        
+        if not raw_html:
+            raise HTTPException(status_code=404, detail="No raw_content found in document")
+        
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".htm", mode="w", encoding="utf-8")
+        tmp_file.write(raw_html)
+        tmp_file.close()
+        
+        return tmp_file.name, f"{first_form}_0.htm"
 
 
     async def gpt4o_broker_analysis(

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 import logging
 import httpx
 
@@ -83,6 +83,21 @@ async def get_reference_files():
     async with httpx.AsyncClient() as client:
         response = await client.get("http://rag-chatbot:8002/reference-docs-from-analysis", timeout=None)     
         return response.json()
+
+
+@app.get("/download-reference-doc")
+async def download_reference_doc():
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "http://rag-chatbot:8002/download-refdoc-redis", timeout=None
+        )
+
+        headers = {
+            "Content-Disposition": resp.headers.get("content-disposition", "attachment; filename=reference.htm"),
+            "Content-Type": resp.headers.get("content-type", "text/html"),
+        }
+        return Response(content=resp.content, headers=headers, media_type=headers["Content-Type"])
+
 
 @app.get("/forecast/{ticker}")
 async def get_forecast(ticker:str):

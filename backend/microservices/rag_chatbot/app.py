@@ -1,6 +1,6 @@
 from rag_chatbot import RAG_Chatbot
 from fastapi import FastAPI, HTTPException, Body
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
@@ -128,6 +128,12 @@ async def get_reference_files():
     except Exception as e:
         logger.error(f"[REDIS ERROR] Failed to fetch reference docs - {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve documents from Redis.")
+
+@app.get("/download-refdoc-redis")
+def download_refdoc_endpoint():
+    client = redis_db["client"]
+    file_path, filename = rag_bot.download_referenz_doc_from_redis(client)
+    return FileResponse(file_path, filename=filename, media_type="text/html")
 
     
 @app.get("/delete-cached-docs")
