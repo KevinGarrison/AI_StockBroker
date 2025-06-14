@@ -15,13 +15,13 @@ app = FastAPI()
 async def get_forecast(ticker: str):
     async with httpx.AsyncClient() as client:
         # Preis-Historie abrufen
-        res_history = await client.get(f"http://api-fetcher:8001/stock-history/{ticker}", timeout=None)
+        res_history = await client.get(f"http://localhost:8001/stock-history/{ticker}", timeout=None)#(f"http://api-fetcher:8001/stock-history/{ticker}", timeout=None)
         if res_history.status_code != 200:
             return JSONResponse(content={"error": "Stock history unavailable"}, status_code=500)
         price_data = res_history.json()
 
         # Unternehmensdaten abrufen
-        res_facts = await client.get(f"http://api-fetcher:8001/yfinance-company-facts/{ticker}", timeout=None)
+        res_facts = await client.get(f"http://localhost:8001/yfinance-company-facts/{ticker}", timeout=None)#(f"http://api-fetcher:8001/yfinance-company-facts/{ticker}", timeout=None)
         if res_facts.status_code != 200:
             return JSONResponse(content={"error": "Company facts unavailable"}, status_code=500)
         facts_data = res_facts.json()
@@ -32,8 +32,6 @@ async def get_forecast(ticker: str):
     df['unique_id'] = ticker
 
     # Notwendige Features in DataFrame einfügen
-    #df['recommendation_key'] = facts_data.get('recommendation_key', 'hold')
-    #df['recommendation'] = 1 if features.get('recommendation_key') == 'buy' else 0
     df['recommendation'] = 1 if facts_data.get('recommendation_key', '').lower() == 'buy' else 0
     df['eps_forward'] = facts_data.get('eps_forward', 0.0)
     df['revenue_growth'] = facts_data.get('revenue_growth', 0.0)
@@ -44,7 +42,16 @@ async def get_forecast(ticker: str):
 
     # Forecast berechnen
     result = forecast_stock(ticker, df)
+    forecast_df = result.rename(columns={'RNN': 'y'})
+
+    # Select relevant columns for both DataFrames
+    history_part = df[['ds', 'y']].copy()
+    forecast_part = forecast_df[['ds', 'y']].copy()
+
+    final_result = {'history':history_part.to_dict(), 'forecast': forecast_part.to_dict()}
+
+
+    encoded = jsonable_encoder(final_result)
 
     # Ergebnis zurückgeben
-    #return JSONResponse(content=jsonable_encoder(result), status_code=200)
-    return JSONResponse(content=result, status_code=200)
+    return JSONResponse(content=encoded, status_code=200)
