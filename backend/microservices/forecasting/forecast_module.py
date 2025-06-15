@@ -12,9 +12,9 @@ def forecast_stock(ticker: str, df: pd.DataFrame) -> dict:
     # Step 2: Remove timezone info, so it's datetime64[ns] (naive)
     df['ds'] = df['ds'].dt.tz_localize(None)    
     df['unique_id'] = df['unique_id'].astype(str)
-    df['y'] = df['y'].astype(float)
+    df['y'] = df['y'].astype('float64')
     # Further features
-    df['recommendation'] = (df['recommendation'] == 'buy').astype(int)
+    #df['recommendation'] = (df['recommendation'] == 'buy').astype(int)
 
     feature_columns = [
         'recommendation', 'eps_forward', 'revenue_growth',
@@ -25,7 +25,7 @@ def forecast_stock(ticker: str, df: pd.DataFrame) -> dict:
     # Fill NaN values in feature columns with 0.0
     for col in feature_columns:
         if col in df.columns:
-            df[col] = df[col].astype(float).fillna(0.0)
+            df[col] = df[col].astype('float64').fillna(0.0)
 
     # Modell
     model = RNN(h=5, input_size=12, max_steps=100)
