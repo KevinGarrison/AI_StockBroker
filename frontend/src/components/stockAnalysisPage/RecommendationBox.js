@@ -24,7 +24,7 @@ function RecommendationBox({ analysis }) {
   } = analysis;
 
   return (
-    <div className="bg-white rounded shadow p-4 mb-4">
+    <div className="bg-white rounded shadow p-4 hover-box mb-4">
       {/* Header */}
       <div className="d-flex align-items-center mb-3" style={{ gap: 10 }}>
         <span style={{ fontSize: 24, color: "#FFD600" }}>🤖</span>
