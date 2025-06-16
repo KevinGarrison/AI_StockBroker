@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-function NewsCarousel({ news, loading, interval = 1000 }) {
+function NewsCarousel({ news, loading, interval = 8000 }) {
   const [current, setCurrent] = useState(0);
 
   useEffect(() => {

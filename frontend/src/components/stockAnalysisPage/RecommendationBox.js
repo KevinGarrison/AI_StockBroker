@@ -26,15 +26,17 @@ function RecommendationBox({ analysis }) {
 
   // Fetch SEC reference docs when modal opens
   const handleOpenModal = () => {
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden"; //disallow scrolling of main StockAnalysis page when open Modal
+    document.body.style.paddingRight = `${scrollbarWidth}px`; // 👈 verhindert das Springen
     setShowModal(true);
 
     fetch("/api/reference-docs")
       .then((res) => res.json())
       .then((data) => {
-              console.log("Fetched reference docs:", data); // 👈 HIER
+        console.log("Fetched reference docs:", data); 
 
         setModalData(Object.values(data).flat());
-
       })
       .catch((err) => {
         console.error("Failed to load reference docs:", err);
@@ -42,11 +44,19 @@ function RecommendationBox({ analysis }) {
       });
   };
 
+  const handleCloseModal = () => {
+    document.body.style.overflow = "auto"; //allow scrolling of main StockAnalysis page again when close Modal
+    document.body.style.paddingRight = "0px";
+    setShowModal(false);
+  };
+
   return (
-    <div className="bg-white rounded shadow p-4 hover-box mb-4">
+    <div className={`bg-white rounded shadow p-4 mb-4 ${showModal ? 'hover-box-active' : 'hover-box'}`}>
       {/* Header */}
       <div className="d-flex align-items-center mb-3" style={{ gap: 10 }}>
-        <h4 className="fw-bold text-primary mb-0">AI Analysis Recommendation</h4>
+        <h4 className="fw-bold text-primary mb-0">
+          AI Analysis Recommendation
+        </h4>
       </div>
 
       {/* Analysis Sections */}
@@ -70,7 +80,8 @@ function RecommendationBox({ analysis }) {
               Fundamental
             </div>
             <ul className="mb-0 small">
-              {fundamental && fundamental.map((item, i) => <li key={i}>{item}</li>)}
+              {fundamental &&
+                fundamental.map((item, i) => <li key={i}>{item}</li>)}
             </ul>
           </div>
         </div>
@@ -124,15 +135,13 @@ function RecommendationBox({ analysis }) {
             Open Meta Data
           </button>
         </div>
-        <div>
-          
-        </div>
+        <div></div>
 
         {/* Modal with dynamic reference data */}
         <SecFileModal
           data={modalData}
           show={showModal}
-          onClose={() => setShowModal(false)}
+          onClose={handleCloseModal}
         />
       </div>
     </div>
