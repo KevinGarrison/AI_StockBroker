@@ -27,6 +27,7 @@ services:
       - INFLUXDB_TOKEN=mySuperSecretToken123!
       - INFLUXDB_ORG=HSAA
       - INFLUXDB_BUCKET=25s-cd-teamb
+      - PYTHONPATH=/app
     restart: "no"
 
 
@@ -119,7 +120,9 @@ services:
     restart: always
 
   forecasting:
-    build: ./backend/microservices/forecasting
+    build:
+      context:  ./backend/microservices
+      dockerfile: forecasting/Dockerfile
     container_name: forecasting
     expose:
       - "8003"

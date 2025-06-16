@@ -1,10 +1,77 @@
-fastapi==0.110.0
-uvicorn==0.29.0
-httpx==0.27.0
-pandas==2.2.2
-neuralforecast==1.6.4
-torch==2.2.2
-scikit-learn==1.4.2
-scipy==1.13.1
-# numpy==2.2.4
-numpy<2
+# Core app dependencies
+fastapi
+uvicorn
+httpx
+pandas
+numpy
+scikit-learn
+scipy
+torch
+torchvision
+
+# Forecasting / ML
+neuralforecast
+yfinance
+yahooquery
+influxdb-client
+python-dotenv
+
+# Web scraping / HTML parsing
+beautifulsoup4
+lxml
+requests-html
+docling
+cssselect
+soupsieve
+yahoo-fin
+
+# PDF, OCR, and document processing
+easyocr
+pypdfium2
+python-docx
+python-pptx
+pylatexenc
+
+# NLP / Transformers
+transformers
+tokenizers
+huggingface-hub
+
+# Async and server tools
+starlette
+httptools
+anyio
+sniffio
+
+# Utility
+python-multipart
+email_validator
+PyYAML
+ujson
+pydantic
+pydantic-settings
+typing_extensions
+
+# Dev / Monitoring / Logging
+tqdm
+rich
+tabulate
+watchfiles
+
+# Optional extras (comment out if unused)
+# pyppeteer
+# opencv-python-headless
+# shapely
+# rtree
+# tifffile
+# sympy
+# openpyxl
+# XlsxWriter
+
+# Meta / support libs
+setuptools
+packaging
+idna
+certifi
+urllib3
+charset-normalizer
