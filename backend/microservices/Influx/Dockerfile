@@ -9,10 +9,16 @@ RUN mkdir -p /app/api_fetcher
 COPY Influx/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+
+
+COPY forecasting/ /app/forecasting/
+
 COPY api_fetcher/api_data_fetcher.py /app/api_fetcher/api_data_fetcher.py
 COPY Influx/ /app/
 
 
 RUN chmod +x /app/wait-for-influx.sh
+
+ENV PYTHONPATH=/app:/app/forecasting
 
 CMD ["./wait-for-influx.sh", "http://influxdb:8086", "python", "influx.py"]
