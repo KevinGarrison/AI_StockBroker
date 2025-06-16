@@ -1,4 +1,4 @@
-function SecFileModal({ data, show, onClose }) {
+function SecFileModal({ data, show, onClose, loading }) {
   if (!show) return null;
 
   // Öffnet ein Dokument in einem neuen Browser-Tab
@@ -17,7 +17,7 @@ function SecFileModal({ data, show, onClose }) {
       <div className="modal-dialog modal-dialog-centered modal-lg">
         <div className="modal-content">
           <div className="modal-header">
-            <h5 className="modal-title">SEC Reference Documents</h5>
+            <h5 className="modal-title">SEC Files</h5>
             <button
               type="button"
               className="btn-close"
@@ -27,7 +27,14 @@ function SecFileModal({ data, show, onClose }) {
           </div>
 
           <div className="modal-body">
-            {data && data.length > 0 ? (
+            {/* during loading */}
+            {loading ? (
+              <div className="text-center text-muted">
+                Loading files...
+              </div>
+
+              // after laoding
+            ) : data && data.length > 0 ? (
               <ul className="list-group">
                 {data.map((doc, index) => (
                   <li
@@ -41,21 +48,21 @@ function SecFileModal({ data, show, onClose }) {
                       className="btn btn-sm btn-outline-primary"
                       onClick={() => openInNewTab(doc.raw_content)}
                     >
-                      Open in New Tab
+                      Open report
                     </button>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-muted">No reference documents available.</p>
+              <p className="text-muted">No SEC files available.</p>
             )}
           </div>
 
-          <div className="modal-footer">
+          {/* <div className="modal-footer">
             <button className="btn btn-secondary" onClick={onClose}>
               Close
             </button>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

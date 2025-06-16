@@ -53,6 +53,16 @@ code {
   transition: all 0.1s ease-in-out;
 }
 
+/* Stock Analysis Page Buttons */
+.btn-hover-scale {
+  transition: transform 0.2s ease;
+}
+
+.btn-hover-scale:hover {
+  transform: scale(1.03);
+}
+
+
 
 /*--------------------*/
 /*CompanyDetails*/
