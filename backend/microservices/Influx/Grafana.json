@@ -76,7 +76,7 @@
     {
       "datasource": {
         "type": "influxdb",
-        "uid": "beio97rn22zuob"
+        "uid": "aep406r1n42dca"
       },
       "fieldConfig": {
         "defaults": {
@@ -137,7 +137,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 11,
+        "h": 8,
         "w": 24,
         "x": 0,
         "y": 3
@@ -169,6 +169,95 @@
       ],
       "title": "${ticker} – ${agg_func} of close price",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "aep406r1n42dca"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.6.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"25s-cd-teamb\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"forecast_prices\")\r\n\r\n  |> filter(fn: (r) => exists r[\"ticker\"] and r[\"ticker\"] =~ /^${ticker:regex}$/)\r\n  |> aggregateWindow(every: v.windowPeriod, fn: ${agg_func}, createEmpty: false)\r\n  |> yield(name: \"${agg_func}\")\r\n",
+          "refId": "A"
+        }
+      ],
+      "title": "${ticker} – ${agg_func} of forecasting",
+      "type": "timeseries"
     }
   ],
   "preload": false,
@@ -182,22 +271,20 @@
         "allowCustomValue": false,
         "current": {
           "text": [
-            "AACG",
-            "AACBU"
+            "AAPL"
           ],
           "value": [
-            "AACG",
-            "AACBU"
+            "AAPL"
           ]
         },
-        "definition": "from(bucket: \"25s-cd-teamb\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"stock_prices\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"close_price\")\r\n  |> group(columns: [\"ticker\"])\r\n  |> distinct(column: \"ticker\")",
+        "definition": "import \"influxdata/influxdb/schema\"\r\n\r\nschema.tagValues(\r\n  bucket: \"25s-cd-teamb\",\r\n  tag: \"ticker\",\r\n  predicate: (r) => r._measurement == \"stock_prices_ILEF\"\r\n)\r\n",
         "includeAll": false,
         "multi": true,
         "name": "ticker",
         "options": [],
         "query": {
           "maxDataPoints": 10000,
-          "query": "from(bucket: \"25s-cd-teamb\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r[\"_measurement\"] == \"stock_prices\")\r\n  |> filter(fn: (r) => r[\"_field\"] == \"close_price\")\r\n  |> group(columns: [\"ticker\"])\r\n  |> distinct(column: \"ticker\")",
+          "query": "import \"influxdata/influxdb/schema\"\r\n\r\nschema.tagValues(\r\n  bucket: \"25s-cd-teamb\",\r\n  tag: \"ticker\",\r\n  predicate: (r) => r._measurement == \"stock_prices_ILEF\"\r\n)\r\n",
           "refId": "InfluxVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -243,12 +330,12 @@
     ]
   },
   "time": {
-    "from": "now-30d",
-    "to": "now"
+    "from": "2025-05-31T22:00:00.000Z",
+    "to": "2025-11-02T10:09:04.933Z"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "CDC Project",
   "uid": "behe0zf9xwzcwf",
-  "version": 37
+  "version": 12
 }
