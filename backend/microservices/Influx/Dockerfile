@@ -1,12 +1,18 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y curl
+
 WORKDIR /app
-COPY requirements.txt .
+
+RUN mkdir -p /app/api_fetcher
+
+COPY Influx/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-ENV INFLUXDB_URL=http://localhost:8086/
-ENV INFLUXDB_TOKEN=mySuperSecretToken123!
-ENV INFLUXDB_ORG=HSAA
-ENV INFLUXDB_BUCKET=25s-cd-teamb
-CMD ["python", "backend/microservices/Influx/influx.py"]
 
+COPY api_fetcher/api_data_fetcher.py /app/api_fetcher/api_data_fetcher.py
+COPY Influx/ /app/
 
+COPY Influx/wait-for-influx.sh .
+RUN chmod +x wait-for-influx.sh
+
+CMD ["./wait-for-influx.sh", "http://influxdb:8086", "python", "influx.py"]
