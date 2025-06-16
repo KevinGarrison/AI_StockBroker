@@ -42,6 +42,8 @@ function LandingPage() {
       .then((json) => {
         const parsed = typeof json === "string" ? JSON.parse(json) : json;
         setCompanyList(parsed);
+        console.log("[DEBUG] Alle geladenen Ticker:", parsed.map(c => c.ticker));
+
         setLoading(false);
       })
       .catch((err) => {
