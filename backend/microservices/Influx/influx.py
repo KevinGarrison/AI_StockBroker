@@ -73,9 +73,7 @@ class InfluxDBHandler:
                 else:
                     timestamp = timestamp.tz_convert('UTC')
 
-                #if timestamp > now:
-                    #logger.warning(f"Skipping future date for {ticker} at {timestamp}")
-                    #continue
+
 
                 if price is None:
                     continue
@@ -87,7 +85,7 @@ class InfluxDBHandler:
                     continue
 
                 point = (
-                    Point("stock_prices_ILEF")
+                    Point("stock_prices")
                     .tag("ticker", ticker)
                     .field("close_price", price_float)
                     .time(timestamp)
@@ -112,9 +110,6 @@ class InfluxDBHandler:
                 else:
                     timestamp = timestamp.tz_convert('UTC')
 
-                #if timestamp > now:
-                    #logger.warning(f"Skipping future date {timestamp} for ticker {row.get('ticker')}")
-                    #continue
 
                 y_val = row.get('y')
                 if y_val is None:
@@ -130,9 +125,9 @@ class InfluxDBHandler:
 
                
                 point = (
-                    Point("forecast_prices_PARDIS")
+                    Point("forecast_prices")
                     .tag("ticker", ticker)
-                    .tag("type", "forecast456")
+                    .tag("type", "forecast")
                     .field("price", y_float)
                     .time(timestamp)
                 )
@@ -162,11 +157,10 @@ async def process_ticker(ticker, collector, influx_handler):
 
             logger.info(f"Writing forecasting data for {ticker} to InfluxDB...")
             # Get the forecast DataFrame for the ticker from forecasting/app.py
-            forecast_df = await get_forecast_only(ticker)  # Make sure get_forecast_df returns the correct DataFrame
+            forecast_df = await get_forecast_only(ticker) 
             await asyncio.to_thread(influx_handler.write_forecast_df, forecast_df)
 
-            #logger.info(f"Writing forecasting data for {ticker} to InfluxDB...")
-            #await asyncio.to_thread(influx_handler.write_forecast_df, pd.DataFrame(stock_data['price_history'].items(), columns=['ds', 'y']).assign(ticker=ticker))
+    
 
         except Exception as e:
             logger.error(f"Error processing {ticker}: {str(e)}")
