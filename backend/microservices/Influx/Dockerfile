@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY api_fetcher/api_data_fetcher.py /app/api_fetcher/api_data_fetcher.py
 COPY Influx/ /app/
 
-COPY Influx/wait-for-influx.sh .
-RUN chmod +x wait-for-influx.sh
+
+RUN chmod +x /app/wait-for-influx.sh
 
 CMD ["./wait-for-influx.sh", "http://influxdb:8086", "python", "influx.py"]
