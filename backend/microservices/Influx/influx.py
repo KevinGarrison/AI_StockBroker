@@ -18,6 +18,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+print("Influx code is running now - this step is only to test if influx run automatic...")
 class DataCollector:
     """
     A class to collect data from Yahoo Finance
