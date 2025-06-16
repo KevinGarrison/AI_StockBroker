@@ -59,7 +59,7 @@ function CompanyChart({ history }) {
 
   return (
     <div className="bg-white rounded shadow p-4 hover-box">
-      <h4 className="mb-3 text-secondary">📉 Stock Price Chart</h4>
+      <h4 className="mb-3 text-secondary">Stock Price Chart</h4>
       {!history ? <p>Lade Chart-Daten...</p> : <svg ref={chartRef} width={800} height={400}></svg>}
     </div>
   );

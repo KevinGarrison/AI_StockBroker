@@ -65,9 +65,9 @@ function LandingPage() {
   };
 
   return (
-    <div style={{ backgroundColor: "#f0f2f5", minHeight: "100vh",  }}>
+    // <div style={{ backgroundColor: "#f0f2f5", minHeight: "100vh",  }}>
       <div className="container py-5 text-center">
-        <h1 className="mb-4">Stockbroker AI</h1>
+        <h1 className="fw-bold display-5 text-primary">Stockbroker AI</h1>
 
         {loading ? (
           <StockLoadingScreen />
@@ -84,7 +84,7 @@ function LandingPage() {
           </>
         )}
       </div>
-    </div>
+    // </div>
   );
 }
 

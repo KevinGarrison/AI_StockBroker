@@ -31,25 +31,30 @@ function StockAnalysis() {
       });
 
     // ---------- ANALYSIS ----------
-    setLoadingAnalysis(true);
-    const analysisController = new AbortController();
-    fetch(`/api/stock-broker-analysis/${ticker}`, {
-      signal: analysisController.signal,
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (analysisController.signal.aborted) return;
-        if (data && data.broker_analysis) {
-          const analysis = ParseBrokerAnalysis(data.broker_analysis);
-          setModernAnalysis(analysis);
-        }
-      })
-      .catch((err) => {
-        if (err.name !== "AbortError") setModernAnalysis(null);
-      })
-      .finally(() => {
-        if (!analysisController.signal.aborted) setLoadingAnalysis(false);
-      });
+setLoadingAnalysis(true);
+const analysisController = new AbortController();
+fetch(`/api/stock-broker-analysis/${ticker}`, {
+  signal: analysisController.signal,
+})
+  .then((res) => res.json())
+  .then((data) => {
+    if (analysisController.signal.aborted) return;
+
+    console.log("[/stock-broker-analysis API Response]:", data); // 🔍 DEBUG
+    
+    if (data) {
+      const analysis = ParseBrokerAnalysis(data); // ❗ Direkt data (nicht data.broker_analysis)
+      console.log("[Parsed Analysis]:", analysis); // 🔍 DEBUG
+      setModernAnalysis(analysis);
+    }
+  })
+  .catch((err) => {
+    if (err.name !== "AbortError") setModernAnalysis(null);
+  })
+  .finally(() => {
+    if (!analysisController.signal.aborted) setLoadingAnalysis(false);
+  });
+
 
     // CLEAN-UP: Beide Fetches abbrechen, wenn Effect neu startet oder Komponente unmountet
     return () => {
@@ -63,7 +68,7 @@ function StockAnalysis() {
       {/* Header */}
       <div className="text-center mb-5">
         <h1 className="fw-bold display-5 text-primary">
-          🔍 Analysis: {ticker}
+          Analysis: {ticker}
         </h1>
         <p className="text-muted">
           Historical, simulated future & recommendations

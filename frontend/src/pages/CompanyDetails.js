@@ -35,7 +35,7 @@ function CompanyDetails() {
       {/* Header */}
       <div className="text-center mb-5">
         <h1 className="fw-bold display-5 text-primary">
-          📈 Company Dashboard: {ticker}
+          Company Dashboard: {ticker}
         </h1>
         <p className="text-muted">Live market chart & key financials</p>
       </div>
@@ -46,7 +46,7 @@ function CompanyDetails() {
 
       {/* AI Button */}
       <div className="text-center mt-5">
-        <button className="btn-modern-primary" onClick={onAnalysisClick}>🤖 AI Analysis</button>
+        <button className="btn-modern-primary" onClick={onAnalysisClick}>AI Analysis</button>
       </div>
     </div>
   );

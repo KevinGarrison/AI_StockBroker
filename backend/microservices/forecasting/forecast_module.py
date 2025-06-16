@@ -14,7 +14,7 @@ def forecast_stock(ticker: str, df: pd.DataFrame) -> dict:
     df['unique_id'] = df['unique_id'].astype(str)
     df['y'] = df['y'].astype('float64')
     # Further features
-    #df['recommendation'] = (df['recommendation'] == 'buy').astype(int)
+    # df['recommendation'] = (df['recommendation'] == 'buy').astype(int)
 
     feature_columns = [
         'recommendation', 'eps_forward', 'revenue_growth',

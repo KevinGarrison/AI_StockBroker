@@ -20,7 +20,7 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList, onStart }) {
 
       {/* Button */}
       <button className="btn-modern-primary" onClick={onStart}>
-        🚀 START BROKER
+        START BROKER
       </button>
     </div>
   );

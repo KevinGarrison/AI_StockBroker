@@ -1,7 +1,6 @@
 import { useState } from "react";
 import SecFileModal from "./SecFileModal";
 
-// Helper: gibt Farben nach Recommendation zurück
 function badgeColor(rec) {
   if (rec.toUpperCase().includes("BUY")) return "success";
   if (rec.toUpperCase().includes("SELL")) return "danger";
@@ -11,7 +10,8 @@ function badgeColor(rec) {
 
 function RecommendationBox({ analysis }) {
   const [showModal, setShowModal] = useState(false);
-  
+  const [modalData, setModalData] = useState([]);
+
   if (!analysis) return null;
 
   const {
@@ -21,25 +21,40 @@ function RecommendationBox({ analysis }) {
     recommendation,
     justification,
     meta,
+    risks,
   } = analysis;
+
+  // Fetch SEC reference docs when modal opens
+  const handleOpenModal = () => {
+    setShowModal(true);
+
+    fetch("/api/reference-docs")
+      .then((res) => res.json())
+      .then((data) => {
+              console.log("Fetched reference docs:", data); // 👈 HIER
+
+        setModalData(Object.values(data).flat());
+
+      })
+      .catch((err) => {
+        console.error("Failed to load reference docs:", err);
+        setModalData([]);
+      });
+  };
 
   return (
     <div className="bg-white rounded shadow p-4 hover-box mb-4">
       {/* Header */}
       <div className="d-flex align-items-center mb-3" style={{ gap: 10 }}>
-        <span style={{ fontSize: 24, color: "#FFD600" }}>🤖</span>
-        <h4 className="fw-bold text-primary mb-0">
-          AI Analysis Recommendation
-        </h4>
+        <h4 className="fw-bold text-primary mb-0">AI Analysis Recommendation</h4>
       </div>
+
+      {/* Analysis Sections */}
       <div className="row g-3">
         {/* Technical */}
         <div className="col-md-4">
           <div className="p-3 rounded bg-light border h-100">
             <div className="fw-bold mb-2" style={{ color: "#1e88e5" }}>
-              <span role="img" aria-label="tech" style={{ marginRight: 6 }}>
-                📈
-              </span>
               Technical
             </div>
             <ul className="mb-0 small">
@@ -47,36 +62,23 @@ function RecommendationBox({ analysis }) {
             </ul>
           </div>
         </div>
+
         {/* Fundamental */}
         <div className="col-md-4">
           <div className="p-3 rounded bg-light border h-100">
             <div className="fw-bold mb-2" style={{ color: "#43a047" }}>
-              <span
-                role="img"
-                aria-label="fundamental"
-                style={{ marginRight: 6 }}
-              >
-                💹
-              </span>
               Fundamental
             </div>
             <ul className="mb-0 small">
-              {fundamental &&
-                fundamental.map((item, i) => <li key={i}>{item}</li>)}
+              {fundamental && fundamental.map((item, i) => <li key={i}>{item}</li>)}
             </ul>
           </div>
         </div>
+
         {/* Sentiment */}
         <div className="col-md-4">
           <div className="p-3 rounded bg-light border h-100">
             <div className="fw-bold mb-2" style={{ color: "#ff9800" }}>
-              <span
-                role="img"
-                aria-label="sentiment"
-                style={{ marginRight: 6 }}
-              >
-                💬
-              </span>
               Sentiment
             </div>
             <ul className="mb-0 small">
@@ -85,6 +87,7 @@ function RecommendationBox({ analysis }) {
           </div>
         </div>
       </div>
+
       {/* Recommendation */}
       {recommendation && (
         <div className="d-flex align-items-center mt-4 mb-1">
@@ -101,49 +104,33 @@ function RecommendationBox({ analysis }) {
           </span>
         </div>
       )}
-      {/* Meta */}
+
+      {/* Risks */}
+      {risks && (
+        <div className="alert alert-warning mt-4">
+          <b>Risks:</b> {risks}
+        </div>
+      )}
+
+      {/* Meta Preview */}
       <div className="mt-4 p-3 small bg-light border rounded position-relative">
         <div className="fw-bold mb-1 text-primary d-flex justify-content-between align-items-center">
           Meta Data SEC Files
           <button
             className="btn btn-sm btn-outline-primary"
             style={{ fontSize: 13 }}
-            onClick={() => setShowModal(true)}
+            onClick={handleOpenModal}
           >
             Open Meta Data
           </button>
         </div>
         <div>
-          {meta.form && (
-            <>
-              <b>Form:</b> {meta.form} <br />
-            </>
-          )}
-          {meta.reportDate && (
-            <>
-              <b>Report Date:</b> {meta.reportDate} <br />
-            </>
-          )}
-          {meta.accessionNumber && (
-            <>
-              <b>Accession Number:</b> {meta.accessionNumber} <br />
-            </>
-          )}
-          {meta.cik && (
-            <>
-              <b>CIK:</b> {meta.cik}
-            </>
-          )}
-          {!meta.form &&
-            !meta.reportDate &&
-            !meta.accessionNumber &&
-            !meta.cik && (
-              <span className="text-muted">No meta data found.</span>
-            )}
+          
         </div>
-        {/* Das Modal */}
+
+        {/* Modal with dynamic reference data */}
         <SecFileModal
-          meta={meta}
+          data={modalData}
           show={showModal}
           onClose={() => setShowModal(false)}
         />
