@@ -169,3 +169,13 @@ async def get_forecast(ticker:str):
     async with httpx.AsyncClient() as client:
         response = await client.get(f"http://forecasting:8003/forecast/{ticker}", timeout=None)     
         return response.json()
+
+
+
+
+
+@app.post("/write/{ticker}")
+async def post_forecast(ticker: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f"http://forecasting:8003/write/{ticker}", timeout=None)
+        return response.json()
