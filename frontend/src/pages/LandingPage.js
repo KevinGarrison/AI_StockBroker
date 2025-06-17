@@ -42,7 +42,25 @@ function LandingPage() {
       .then((json) => {
         const parsed = typeof json === "string" ? JSON.parse(json) : json;
         setCompanyList(parsed);
-        console.log("[DEBUG] Alle geladenen Ticker:", parsed.map(c => c.ticker));
+
+        // ✅ DEBUG: Anzahl und Beispielticker loggen
+        console.log("✅ companyList geladen:", parsed.length, "Unternehmen");
+        console.log(
+          "🔍 Beispiel-Ticker aus companyList:",
+          parsed.slice(0, 20).map((c) => c.ticker)
+        );
+
+        // Optional: Überprüfe z. B. auf einen bestimmten Ticker
+        const check = ["TGT", "DG", "BJ", "TBBB"];
+        check.forEach((ticker) => {
+          const found = parsed.find((c) => c.ticker === ticker);
+          if (!found) console.warn(`❌ ${ticker} fehlt in companyList`);
+        });
+
+        console.log(
+          "[DEBUG] Alle geladenen Ticker:",
+          parsed.map((c) => c.ticker)
+        );
 
         setLoading(false);
       })
@@ -67,26 +85,27 @@ function LandingPage() {
   };
 
   return (
-    // <div style={{ backgroundColor: "#f0f2f5", minHeight: "100vh",  }}>
-      <div className="container py-5 text-center">
-        <h1 className="fw-bold display-5 text-primary">Stockbroker AI</h1>
+    <div className="container py-5 text-center">
+      <h1 className="fw-bold display-5 text-primary mb-2">Stockbroker AI</h1>
+      <p className="text-muted mb-5">
+        Your intelligent gateway to the stock market
+      </p>
 
-        {loading ? (
-          <StockLoadingScreen />
-        ) : (
-          <>
-            <WorldClockGrid cities={cities} times={times} />
+      {loading ? (
+        <StockLoadingScreen />
+      ) : (
+        <>
+          <WorldClockGrid cities={cities} times={times} />
 
-            <SearchBarFilters
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              companyList={companyList}
-              onStart={handleStart}
-            />
-          </>
-        )}
-      </div>
-    // </div>
+          <SearchBarFilters
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            companyList={companyList}
+            onStart={handleStart}
+          />
+        </>
+      )}
+    </div>
   );
 }
 

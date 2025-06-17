@@ -7,8 +7,14 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
   const [selectedFilter, setSelectedFilter] = useState(null);
   const [marketCap, setMarketCap] = useState("");
   const [filteredCompanyList, setFilteredCompanyList] = useState([]);
+  const [isFiltering, setIsFiltering] = useState(false);
 
-  // Lade Filterkategorien
+  const simplify = (str) =>
+    str
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "");
+
   useEffect(() => {
     fetch("/api/first-filter-dropdown")
       .then((res) => res.json())
@@ -23,53 +29,115 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
       .catch((err) => console.error("Filter fetch failed:", err));
   }, []);
 
-  // Initialisiere gefilterte Liste mit allen Companies
   useEffect(() => {
     setFilteredCompanyList(companyList);
+
+    // ⬇️ Debug-Prüfung, ob Ticker aus Filter-API fehlen
+    const debugFilteredTickers = [
+      "GE",
+      "RTX",
+      "LMT",
+      "TDG",
+      "GD",
+      "NOC",
+      "HWM",
+      "LHX",
+      "HEI-A",
+      "HEI",
+      "CW",
+      "TXT",
+      "BWXT",
+      "SARO",
+      "ERJ",
+      "HII",
+      "CAE",
+      "LOAR",
+      "MOG-A",
+    ];
+    const missing = debugFilteredTickers.filter(
+      (t) => !companyList.some((c) => c.ticker === t)
+    );
+    console.warn("⚠️ FEHLENDE TICKER IN companyList:", missing);
   }, [companyList]);
 
-  // Filtere Companies, wenn sich Filter ändern
   useEffect(() => {
-  const fetchFilteredCompanies = async () => {
-    if (!selectedFilter || companyList.length === 0) {
-      console.log("[DEBUG] Kein Filter aktiv oder companyList noch leer");
+    if (!selectedFilter) {
       setFilteredCompanyList(companyList);
       return;
     }
+    applyFilter();
+  }, [selectedFilter]);
 
-    console.log("[DEBUG] Aktiver Filter:", selectedFilter.value);
+  const applyFilter = async () => {
+    setIsFiltering(true);
+
+    if (!selectedFilter || companyList.length === 0) {
+      setFilteredCompanyList(companyList);
+      setIsFiltering(false);
+      return;
+    }
+
+    const url = marketCap
+      ? `/api/second-filter-market-cap/${selectedFilter.value}/${marketCap}`
+      : `/api/tickers-for-screener/${selectedFilter.value}`;
 
     try {
-      const res = await fetch(`/api/tickers-for-screener/${selectedFilter.value}`);
+      const res = await fetch(url);
       const tickers = await res.json();
 
-      console.log("[DEBUG] Ticker vom Filter-Endpunkt:", tickers.slice(0, 10), "...");
+      const cleanedTickers = tickers.map((t) =>
+        t.replaceAll('"', "").trim().toUpperCase()
+      );
+      const cleanedSimplified = cleanedTickers.map(simplify);
 
       const matching = companyList.filter((c) =>
-        tickers.map((t) => t.toUpperCase()).includes(c.ticker.toUpperCase())
+        cleanedSimplified.includes(simplify(c.ticker))
       );
 
-      console.log("[DEBUG] Anzahl gefundener Matching-Companies:", matching.length);
-      if (matching.length === 0) {
-        console.warn("[WARNUNG] Kein Match! Prüfe Ticker-Namen oder Backend-Antwort.");
-      }
+      const unmatched = cleanedTickers.filter(
+        (t) => !companyList.some((c) => simplify(c.ticker) === simplify(t))
+      );
+      console.log("Cleaned API tickers:", cleanedTickers);
+      console.log(
+        "Matching Companies:",
+        matching.map((c) => `${c.ticker} | ${c.title}`)
+      );
+      if (unmatched.length > 0)
+        console.warn("⚠️ Unmatched Tickers:", unmatched);
+      const missingTickers = cleanedTickers.filter(
+        (ticker) =>
+          !companyList.some((c) => simplify(c.ticker) === simplify(ticker))
+      );
+      console.warn("⚠️ FEHLENDE TICKER IN companyList:", missingTickers);
 
+      missingTickers.forEach((t) => {
+        const possible = companyList.filter((c) =>
+          simplify(c.ticker).includes(simplify(t))
+        );
+        console.log(
+          `🔎 Kandidaten für "${t}":`,
+          possible.map((c) => `${c.ticker} | ${c.title}`)
+        );
+      });
       setFilteredCompanyList(matching);
     } catch (err) {
-      console.error("[FEHLER] Beim Filter-Fetch:", err);
+      console.error("Could not fetch filtered companies:", err);
       setFilteredCompanyList([]);
+    } finally {
+      setIsFiltering(false);
     }
   };
 
-  fetchFilteredCompanies();
-}, [selectedFilter, companyList]);
-
+  const resetFilters = () => {
+    setSelectedFilter(null);
+    setMarketCap("");
+    setFilteredCompanyList(companyList);
+  };
 
   const handleStart = async () => {
-    // 1. Manuelle Eingabe prüfen
     if (searchTerm.trim()) {
       const selectedCompany = filteredCompanyList.find(
-        (c) => c.title.toLowerCase() === searchTerm.trim().toLowerCase()
+        (c) => c.title.trim().toLowerCase() === searchTerm.trim().toLowerCase()
       );
       if (selectedCompany) {
         window.location.href = `/company?company=${selectedCompany.ticker}`;
@@ -77,7 +145,6 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
       }
     }
 
-    // 2. Falls Filter aktiv
     if (selectedFilter) {
       const url = marketCap
         ? `/api/second-filter-market-cap/${selectedFilter.value}/${marketCap}`
@@ -104,56 +171,86 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
     alert("Please enter a company or select a filter.");
   };
 
-  const resetFilters = () => {
-    setSelectedFilter(null);
-    setMarketCap("");
-  };
-
   return (
     <div className="text-center mt-4">
-
-      {/* 🔍 Suchfeld */}
-      <div className="mb-4">
+      {/* Suchfeld */}
+      <div className="container mb-4" style={{ maxWidth: "700px" }}>
         <input
           type="text"
-          className="form-control w-50 mx-auto"
+          className="form-control mx-auto"
           placeholder="🔍 Search company name..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           list="companies"
+          disabled={isFiltering}
         />
         <datalist id="companies">
           {filteredCompanyList.map((company, idx) => (
-            <option key={`${company.ticker}-${idx}`} value={company.title} />
+            <option
+              key={`${company.ticker}-${idx}`}
+              value={company.title.trim()}
+            />
           ))}
         </datalist>
       </div>
 
-      {/* 📊 Filter: Kategorie */}
-      <div className="container mb-3" style={{ maxWidth: 600 }}>
-        <label className="form-label fw-semibold">Category Filter</label>
-        <Select
-          options={filters}
-          value={selectedFilter}
-          onChange={setSelectedFilter}
-          isClearable
-          placeholder="Choose a filter..."
-        />
+      {/* Ladeanzeige */}
+      {isFiltering && (
+        <div className="mb-3 d-flex justify-content-center align-items-center gap-2">
+          <div className="spinner-border text-primary" role="status" />
+          <span className="text-muted">Loading filtered companies…</span>
+        </div>
+      )}
+
+      {/* Filter-Karte */}
+      <div className="container mb-4" style={{ maxWidth: 700 }}>
+        <div className="bg-white shadow rounded p-4 hover-box">
+          <div className="row g-3 align-items-end">
+            <div className="col-md-6 text-start">
+              <label className="form-label fw-semibold">Category</label>
+              <Select
+                options={filters}
+                value={selectedFilter}
+                onChange={setSelectedFilter}
+                isClearable
+                placeholder="Choose a category..."
+                className="border rounded"
+                isDisabled={isFiltering}
+              />
+            </div>
+
+            <div className="col-md-4 text-start">
+              <label className="form-label fw-semibold">
+                Market Cap (in Mio)
+              </label>
+              <div className="input-group">
+                <span className="input-group-text bg-white border-end-0">
+                  ≥
+                </span>
+                <input
+                  type="number"
+                  className="form-control border-start-0"
+                  placeholder="e.g. 100000"
+                  value={marketCap}
+                  onChange={(e) => setMarketCap(e.target.value)}
+                  disabled={isFiltering}
+                />
+              </div>
+            </div>
+
+            <div className="col-md-2 d-grid">
+              <button
+                className="btn btn-primary fw-semibold"
+                onClick={applyFilter}
+                disabled={isFiltering}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* 💰 Filter: Market Cap */}
-      <div className="container mb-3" style={{ maxWidth: 600 }}>
-        <label className="form-label fw-semibold">Minimum Market Cap (in Mio)</label>
-        <input
-          type="number"
-          className="form-control"
-          placeholder="e.g. 100000"
-          value={marketCap}
-          onChange={(e) => setMarketCap(e.target.value)}
-        />
-      </div>
-
-      {/* 🏷️ Aktive Filter als Tags */}
       {(selectedFilter || marketCap) && (
         <div className="text-center mb-4">
           {selectedFilter && (
@@ -176,17 +273,18 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
               />
             </span>
           )}
-          {(selectedFilter || marketCap) && (
-            <button className="btn btn-link ms-3 p-0" onClick={resetFilters}>
-              Reset All
-            </button>
-          )}
+          <button className="btn btn-link ms-3 p-0" onClick={resetFilters}>
+            Reset All
+          </button>
         </div>
       )}
 
-      {/* 🚀 Start-Button */}
       <div className="text-center mt-3">
-        <button className="btn btn-primary btn-lg px-5" onClick={handleStart}>
+        <button
+          className="btn btn-primary btn-lg px-5"
+          onClick={handleStart}
+          disabled={isFiltering}
+        >
           START BROKER
         </button>
       </div>
