@@ -3,12 +3,14 @@ import NewsCarousel from "../components/stockAnalysisPage/NewsCarousel";
 import ParseBrokerAnalysis from "../utils/ParseBrokerAnalysis";
 import RecommendationBox from "../components/stockAnalysisPage/RecommendationBox";
 import AnalysisLoadingScreen from "../components/stockAnalysisPage/AnalysisLoadingScreen";
+import AnalysisChart from "../components/stockAnalysisPage/AnalysisChart";
 
 function StockAnalysis() {
   const [news, setNews] = useState([]);
   const [loadingNews, setLoadingNews] = useState(true);
   const [modernAnalysis, setModernAnalysis] = useState(null);
   const [loadingAnalysis, setLoadingAnalysis] = useState(true);
+  const [forecastData, setForecastData] = useState(null);
   const params = new URLSearchParams(window.location.search);
   const ticker = params.get("company");
 
@@ -33,6 +35,15 @@ function StockAnalysis() {
         .finally(() => {
           if (!newsController.signal.aborted) setLoadingNews(false);
         });
+
+      // ---------- History & Forecast ----------
+
+      fetch(`/api/forecast/${ticker}`)
+        .then((res) => res.json())
+        .then((data) => {
+          setForecastData(data);
+        })
+        .catch((err) => console.error("Fehler beim Forecast:", err));
 
       // ---------- ANALYSIS ----------
       setLoadingAnalysis(true);
@@ -80,17 +91,19 @@ function StockAnalysis() {
       {/* News-Carousel */}
       <NewsCarousel news={news} loading={loadingNews} />
 
+      <div className="mb-4">
+            {forecastData && <AnalysisChart data={forecastData} />}
+          </div>
+
       {/* Charts & Recommendation */}
       {loadingAnalysis ? (
         <AnalysisLoadingScreen />
       ) : (
         <>
           {/* Charts & Simulation Placeholder */}
-          <div className="mb-4">
-            <div className="alert alert-info">
-              [Kursverlauf, simulierte Zukunft etc.]
-            </div>
-          </div>
+          {/* <div className="mb-4">
+            {forecastData && <AnalysisChart data={forecastData} />}
+          </div> */}
           {/* Recommendation */}
           <div className="mt-4">
             <RecommendationBox analysis={modernAnalysis} />
