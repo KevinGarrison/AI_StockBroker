@@ -15,6 +15,24 @@ services:
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mySuperSecretToken123!
     restart: always
 
+  influx-client:
+    build:
+      context: ./backend/microservices
+      dockerfile: Influx/Dockerfile
+    container_name: influx-client
+    depends_on:
+      - influxdb
+    environment:
+      - INFLUXDB_URL=http://influxdb:8086/
+      - INFLUXDB_TOKEN=mySuperSecretToken123!
+      - INFLUXDB_ORG=HSAA
+      - INFLUXDB_BUCKET=25s-cd-teamb
+      - PYTHONPATH=/app
+    restart: "no"
+
+
+
+
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -102,7 +120,9 @@ services:
     restart: always
 
   forecasting:
-    build: ./backend/microservices/forecasting
+    build:
+      context:  ./backend/microservices
+      dockerfile: forecasting/Dockerfile
     container_name: forecasting
     expose:
       - "8003"

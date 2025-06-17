@@ -8,7 +8,11 @@ import yfinance as yf
 import pandas as pd
 import logging
 from influxdb_client import InfluxDBClient, Point, WritePrecision
-from influxdb_client.client.write_api import SYNCHRONOUS 
+from influxdb_client.client.write_api import SYNCHRONOUS
+
+# Import the function or variable that provides the forecast DataFrame
+from forecasting.utils import get_forecast_only
+
 
 
 # Configure logging
@@ -18,20 +22,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+print("Influx code is running now - this step is only to test if influx run automatic...")
+
+
 class DataCollector:
     """
     A class to collect data from Yahoo Finance
     """
 
     async def fetch_stock_data_yf(self, ticker: str, period: str = "1y", interval: str = "1d") -> dict:
-        """
-        Fetches stock data from Yahoo Finance.
-        
-        :param ticker: Stock ticker symbol (e.g., 'AAPL').
-        :param period: Time period to fetch (default "1y" for one year).
-        :param interval: Data interval (default "1d" for daily data).
-        :return: A dictionary containing stock info and historical price data.
-        """
         def _fetch():
             yf_ticker = yf.Ticker(ticker)
             history = yf_ticker.history(period=period, interval=interval)
@@ -53,7 +52,7 @@ class InfluxDBHandler:
     """
     A class to handle InfluxDB operations: connecting and writing data.
     """
-    
+
     def __init__(self):
         self.url = os.getenv("INFLUXDB_URL", "http://localhost:8086/")
         self.token = os.getenv("INFLUXDB_TOKEN", "mySuperSecretToken123!")
@@ -63,38 +62,28 @@ class InfluxDBHandler:
         self.write_api = self.client.write_api(write_options=SYNCHRONOUS)
 
     def write_stock_data(self, stock_data: dict):
-        """
-        Writes stock data into InfluxDB.
-        
-        :param stock_data: Dictionary containing stock's historical data.
-        """
         ticker = stock_data.get("ticker")
-        now = pd.Timestamp.now(tz='UTC')  # Make now timezone-aware in UTC
-        
+        now = pd.Timestamp.now(tz='UTC')
+
         for timestamp, price in stock_data.get("price_history", {}).items():
             try:
-                # Convert timestamp to UTC if it has timezone info, or assume UTC if it doesn't
                 timestamp = pd.to_datetime(timestamp)
                 if timestamp.tzinfo is None:
                     timestamp = timestamp.tz_localize('UTC')
                 else:
                     timestamp = timestamp.tz_convert('UTC')
-                
-                # Skip future dates
-                if timestamp > now:
-                    logger.warning(f"Skipping future date for {ticker} at {timestamp}")
-                    continue
-                
-                # Skip if price is None or not convertible to float
+
+
+
                 if price is None:
                     continue
-                
+
                 try:
                     price_float = float(price)
                 except (ValueError, TypeError):
                     logger.error(f"Invalid price value for {ticker} at {timestamp}: {price}")
                     continue
-                
+
                 point = (
                     Point("stock_prices")
                     .tag("ticker", ticker)
@@ -102,15 +91,79 @@ class InfluxDBHandler:
                     .time(timestamp)
                 )
                 self.write_api.write(bucket=self.bucket, org=self.org, record=point)
-                
+
             except Exception as e:
                 logger.error(f"Error writing stock data for {ticker} at {timestamp}: {str(e)}")
-            else:
-                logger.debug(f"Stock data point for {ticker} at {timestamp} successfully written to InfluxDB.")
+
+    def write_forecast_df(self, df: pd.DataFrame):
+        """
+        Write forecast DataFrame to InfluxDB.
+        Expected df columns: 'ds' (datetime), 'y' (float), 'ticker' (str)
+        """
+        now = pd.Timestamp.now(tz='UTC')
+
+        for _, row in df.iterrows():
+            try:
+                timestamp = pd.to_datetime(row['ds'])
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.tz_localize('UTC')
+                else:
+                    timestamp = timestamp.tz_convert('UTC')
+
+
+                y_val = row.get('y')
+                if y_val is None:
+                    continue
+
+                try:
+                    y_float = float(y_val)
+                except (ValueError, TypeError):
+                    logger.error(f"Invalid forecast value {y_val} for ticker {row.get('ticker')} at {timestamp}")
+                    continue
+
+                ticker = str(row.get('ticker', 'unknown'))
+
+               
+                point = (
+                    Point("forecast_prices")
+                    .tag("ticker", ticker)
+                    .tag("type", "forecast")
+                    .field("price", y_float)
+                    .time(timestamp)
+                )
+                self.write_api.write(bucket=self.bucket, org=self.org, record=point)
+
+            except Exception as e:
+                logger.error(f"Error writing forecast data for ticker {row.get('ticker')} at {row.get('ds')}: {str(e)}")
+
 
     def close(self):
-        """ Closes the InfluxDB client connection. """
         self.client.close()
+
+
+# Optional: limit concurrency (e.g., to 10 parallel tasks)
+semaphore = asyncio.Semaphore(10)
+
+
+async def process_ticker(ticker, collector, influx_handler):
+    async with semaphore:
+        try:
+            logger.info(f"Fetching stock data for {ticker}...")
+            stock_data = await collector.fetch_stock_data_yf(ticker)
+            logger.debug(f"Stock Data for {ticker}: {stock_data}")
+
+            logger.info(f"Writing stock data for {ticker} to InfluxDB...")
+            influx_handler.write_stock_data(stock_data)
+
+            logger.info(f"Writing forecasting data for {ticker} to InfluxDB...")
+            # Get the forecast DataFrame for the ticker from forecasting/app.py
+            forecast_df = await get_forecast_only(ticker) 
+            await asyncio.to_thread(influx_handler.write_forecast_df, forecast_df)
+
+    
+
+        except Exception as e:
+            logger.error(f"Error processing {ticker}: {str(e)}")
 
 
 async def main():
@@ -119,16 +172,14 @@ async def main():
     fetcher = API_Fetcher()
 
     logger.info("Fetching list of all major stock indices...")
-    tickers = await fetcher.fetch_all_major_indices()  
+    tickers = await fetcher.fetch_all_major_indices()
     logger.info(f"Fetched {len(tickers)} tickers.")
 
-    for ticker in tickers:
-        logger.info(f"Fetching stock data for {ticker}...")
-        stock_data = await collector.fetch_stock_data_yf(ticker)
-        logger.debug(f"Stock Data for {ticker}: {stock_data}")
-
-        logger.info(f"Writing stock data for {ticker} to InfluxDB...")
-        influx_handler.write_stock_data(stock_data)
+    tasks = [
+        process_ticker(ticker, collector, influx_handler)
+        for ticker in tickers
+    ]
+    await asyncio.gather(*tasks)
 
     influx_handler.close()
     logger.info("Process completed.")
