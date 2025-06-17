@@ -11,6 +11,7 @@ function StockAnalysis() {
   const [modernAnalysis, setModernAnalysis] = useState(null);
   const [loadingAnalysis, setLoadingAnalysis] = useState(true);
   const [forecastData, setForecastData] = useState(null);
+  const [facts, setFacts] = useState(null); //for heading
   const params = new URLSearchParams(window.location.search);
   const ticker = params.get("company");
 
@@ -44,6 +45,18 @@ function StockAnalysis() {
           setForecastData(data);
         })
         .catch((err) => console.error("Fehler beim Forecast:", err));
+
+      // ---------- COMPANY DETAILS ---------
+      // fetching facts to get company name for heading
+      fetch(`/api/company-facts/${ticker}`)
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("Company facts:", data); // 👈 DEBUG
+          setFacts(data);
+        })
+        .catch((err) =>
+          console.error("Error loading the company information:", err)
+        );
 
       // ---------- ANALYSIS ----------
       setLoadingAnalysis(true);
@@ -82,7 +95,15 @@ function StockAnalysis() {
     <div className="container my-5">
       {/* Header */}
       <div className="text-center mb-5">
-        <h1 className="fw-bold display-5 text-primary">Analysis: {ticker}</h1>
+        <h1 className="fw-bold display-5 text-primary">Analysis</h1>
+
+        {facts?.name && (
+          <h2 className="fs-3 text-secondary fw-semibold">
+            {facts.name}
+            <span className="badge bg-secondary ms-2">{ticker}</span>
+          </h2>
+        )}
+
         <p className="text-muted">
           Historical, simulated future & recommendations
         </p>
@@ -91,19 +112,15 @@ function StockAnalysis() {
       {/* News-Carousel */}
       <NewsCarousel news={news} loading={loadingNews} />
 
-      <div className="mb-4">
-            {forecastData && <AnalysisChart data={forecastData} />}
-          </div>
-
       {/* Charts & Recommendation */}
       {loadingAnalysis ? (
         <AnalysisLoadingScreen />
       ) : (
         <>
           {/* Charts & Simulation Placeholder */}
-          {/* <div className="mb-4">
+          <div className="mb-4">
             {forecastData && <AnalysisChart data={forecastData} />}
-          </div> */}
+          </div>
           {/* Recommendation */}
           <div className="mt-4">
             <RecommendationBox analysis={modernAnalysis} />

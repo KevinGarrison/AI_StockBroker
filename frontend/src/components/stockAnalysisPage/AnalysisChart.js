@@ -137,7 +137,7 @@ function AnalysisChart({ data }) {
 
   return (
     <div ref={wrapperRef} className="bg-white rounded shadow p-4 hover-box">
-      <h4 className="mb-3 text-secondary">Stock Price & Forecast (Last 12M)</h4>
+      <h4 className="fw-bold text-primary mb-4">Stock Price History & Forecast (Last 12M)</h4>
       {!data ? (
         <p>Lade Chart-Daten...</p>
       ) : (

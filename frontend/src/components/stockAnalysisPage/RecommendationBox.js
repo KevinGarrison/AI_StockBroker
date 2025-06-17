@@ -13,10 +13,6 @@ function RecommendationBox({ analysis }) {
   const [modalData, setModalData] = useState([]);
   const [isLoadingModalData, setIsLoadingModalData] = useState(false);
 
-  // get ticker
-  const params = new URLSearchParams(window.location.search);
-  const ticker = params.get("company");
-
   if (!analysis) return null;
 
   const {
@@ -122,7 +118,7 @@ function RecommendationBox({ analysis }) {
         {/* Technical */}
         <div className="col-md-4">
           <div className="p-3 rounded bg-light border h-100">
-            <div className="fw-bold mb-2" style={{ color: "#1e88e5" }}>
+            <div className="fw-bold text-primary mb-2">
               Technical
             </div>
             <ul className="mb-0 small">
@@ -134,7 +130,7 @@ function RecommendationBox({ analysis }) {
         {/* Fundamental */}
         <div className="col-md-4">
           <div className="p-3 rounded bg-light border h-100">
-            <div className="fw-bold mb-2" style={{ color: "#43a047" }}>
+            <div className="fw-bold text-primary mb-2">
               Fundamental
             </div>
             <ul className="mb-0 small">
@@ -147,7 +143,7 @@ function RecommendationBox({ analysis }) {
         {/* Sentiment */}
         <div className="col-md-4">
           <div className="p-3 rounded bg-light border h-100">
-            <div className="fw-bold mb-2" style={{ color: "#ff9800" }}>
+            <div className="fw-bold text-primary mb-2">
               Sentiment
             </div>
             <ul className="mb-0 small">
@@ -192,7 +188,7 @@ function RecommendationBox({ analysis }) {
         </button>
 
         <button
-          className="btn btn-success d-flex align-items-center gap-2 btn-hover-scale"
+          className="btn btn-primary d-flex align-items-center gap-2 btn-hover-scale"
           onClick={handleDownload}
         >
           <i className="fas fa-download"></i>

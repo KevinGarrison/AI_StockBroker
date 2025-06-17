@@ -1,19 +1,24 @@
 import { useEffect, useState } from "react";
 import Select from "react-select";
-import { FaTimes } from "react-icons/fa";
+import { FaTimes, FaFilter } from "react-icons/fa";
 
 function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
   const [filters, setFilters] = useState([]);
   const [selectedFilter, setSelectedFilter] = useState(null);
   const [marketCap, setMarketCap] = useState("");
+  const [capUnit, setCapUnit] = useState("B");
   const [filteredCompanyList, setFilteredCompanyList] = useState([]);
   const [isFiltering, setIsFiltering] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+
+  const capUnitOptions = [
+    { value: "M", label: "Million USD" },
+    { value: "B", label: "Billion USD" },
+    { value: "T", label: "Trillion USD" },
+  ];
 
   const simplify = (str) =>
-    str
-      .trim()
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, "");
+    str.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 
   useEffect(() => {
     fetch("/api/first-filter-dropdown")
@@ -31,42 +36,7 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
 
   useEffect(() => {
     setFilteredCompanyList(companyList);
-
-    // ⬇️ Debug-Prüfung, ob Ticker aus Filter-API fehlen
-    const debugFilteredTickers = [
-      "GE",
-      "RTX",
-      "LMT",
-      "TDG",
-      "GD",
-      "NOC",
-      "HWM",
-      "LHX",
-      "HEI-A",
-      "HEI",
-      "CW",
-      "TXT",
-      "BWXT",
-      "SARO",
-      "ERJ",
-      "HII",
-      "CAE",
-      "LOAR",
-      "MOG-A",
-    ];
-    const missing = debugFilteredTickers.filter(
-      (t) => !companyList.some((c) => c.ticker === t)
-    );
-    console.warn("⚠️ FEHLENDE TICKER IN companyList:", missing);
   }, [companyList]);
-
-  useEffect(() => {
-    if (!selectedFilter) {
-      setFilteredCompanyList(companyList);
-      return;
-    }
-    applyFilter();
-  }, [selectedFilter]);
 
   const applyFilter = async () => {
     setIsFiltering(true);
@@ -77,8 +47,20 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
       return;
     }
 
-    const url = marketCap
-      ? `/api/second-filter-market-cap/${selectedFilter.value}/${marketCap}`
+    const unitMultipliers = {
+      M: 1,
+      B: 1000,
+      T: 1_000_000,
+    };
+
+    const numericCap = Number(marketCap);
+    const capInMillion =
+      !isNaN(numericCap) && capUnit in unitMultipliers
+        ? numericCap * unitMultipliers[capUnit]
+        : "";
+
+    const url = capInMillion
+      ? `/api/second-filter-market-cap/${selectedFilter.value}/${capInMillion}`
       : `/api/tickers-for-screener/${selectedFilter.value}`;
 
     try {
@@ -94,31 +76,6 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
         cleanedSimplified.includes(simplify(c.ticker))
       );
 
-      const unmatched = cleanedTickers.filter(
-        (t) => !companyList.some((c) => simplify(c.ticker) === simplify(t))
-      );
-      console.log("Cleaned API tickers:", cleanedTickers);
-      console.log(
-        "Matching Companies:",
-        matching.map((c) => `${c.ticker} | ${c.title}`)
-      );
-      if (unmatched.length > 0)
-        console.warn("⚠️ Unmatched Tickers:", unmatched);
-      const missingTickers = cleanedTickers.filter(
-        (ticker) =>
-          !companyList.some((c) => simplify(c.ticker) === simplify(ticker))
-      );
-      console.warn("⚠️ FEHLENDE TICKER IN companyList:", missingTickers);
-
-      missingTickers.forEach((t) => {
-        const possible = companyList.filter((c) =>
-          simplify(c.ticker).includes(simplify(t))
-        );
-        console.log(
-          `🔎 Kandidaten für "${t}":`,
-          possible.map((c) => `${c.ticker} | ${c.title}`)
-        );
-      });
       setFilteredCompanyList(matching);
     } catch (err) {
       console.error("Could not fetch filtered companies:", err);
@@ -131,6 +88,7 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
   const resetFilters = () => {
     setSelectedFilter(null);
     setMarketCap("");
+    setCapUnit("B");
     setFilteredCompanyList(companyList);
   };
 
@@ -145,27 +103,9 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
       }
     }
 
-    if (selectedFilter) {
-      const url = marketCap
-        ? `/api/second-filter-market-cap/${selectedFilter.value}/${marketCap}`
-        : `/api/tickers-for-screener/${selectedFilter.value}`;
-
-      try {
-        const res = await fetch(url);
-        const tickers = await res.json();
-
-        if (tickers.length === 0) {
-          alert("No companies found with selected filters.");
-          return;
-        }
-
-        window.location.href = `/company?company=${tickers[0]}`;
-        return;
-      } catch (err) {
-        console.error("Filter fetch error:", err);
-        alert("An error occurred while applying filters.");
-        return;
-      }
+    if (filteredCompanyList.length > 0) {
+      window.location.href = `/company?company=${filteredCompanyList[0].ticker}`;
+      return;
     }
 
     alert("Please enter a company or select a filter.");
@@ -173,7 +113,7 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
 
   return (
     <div className="text-center mt-4">
-      {/* Suchfeld */}
+      {/* Search Input */}
       <div className="container mb-4" style={{ maxWidth: "700px" }}>
         <input
           type="text"
@@ -194,63 +134,80 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
         </datalist>
       </div>
 
-      {/* Ladeanzeige */}
-      {isFiltering && (
-        <div className="mb-3 d-flex justify-content-center align-items-center gap-2">
-          <div className="spinner-border text-primary" role="status" />
-          <span className="text-muted">Loading filtered companies…</span>
-        </div>
-      )}
+      {/* Toggle Filter Button */}
+      <div className="mb-3">
+        <button
+          className="btn btn-outline-secondary d-inline-flex align-items-center gap-2"
+          onClick={() => setShowFilters((prev) => !prev)}
+        >
+          <FaFilter /> Filters
+        </button>
+      </div>
 
-      {/* Filter-Karte */}
-      <div className="container mb-4" style={{ maxWidth: 700 }}>
-        <div className="bg-white shadow rounded p-4 hover-box">
-          <div className="row g-3 align-items-end">
-            <div className="col-md-6 text-start">
-              <label className="form-label fw-semibold">Category</label>
-              <Select
-                options={filters}
-                value={selectedFilter}
-                onChange={setSelectedFilter}
-                isClearable
-                placeholder="Choose a category..."
-                className="border rounded"
-                isDisabled={isFiltering}
-              />
-            </div>
-
-            <div className="col-md-4 text-start">
-              <label className="form-label fw-semibold">
-                Market Cap (in Mio)
-              </label>
-              <div className="input-group">
-                <span className="input-group-text bg-white border-end-0">
-                  ≥
-                </span>
-                <input
-                  type="number"
-                  className="form-control border-start-0"
-                  placeholder="e.g. 100000"
-                  value={marketCap}
-                  onChange={(e) => setMarketCap(e.target.value)}
-                  disabled={isFiltering}
+      {/* Filter Box */}
+      {showFilters && (
+        <div className="container mb-4" style={{ maxWidth: 700 }}>
+          <div className="bg-white shadow rounded p-4 hover-box">
+            <div className="row g-3 align-items-stretch">
+              {/* Category */}
+              <div className="col-12 col-md-6 text-start">
+                <label className="form-label fw-semibold">Category</label>
+                <Select
+                  options={filters}
+                  value={selectedFilter}
+                  onChange={setSelectedFilter}
+                  isClearable
+                  placeholder="Choose a category..."
+                  isDisabled={isFiltering}
                 />
               </div>
-            </div>
 
-            <div className="col-md-2 d-grid">
+              {/* Market Cap */}
+              <div className="col-12 col-md-6 text-start">
+                <label className="form-label fw-semibold">Market Cap (min)</label>
+                <div className="d-flex flex-column flex-md-row align-items-stretch gap-2">
+                  <input
+                    type="number"
+                    className="form-control"
+                    placeholder="e.g. 2.5"
+                    value={marketCap}
+                    onChange={(e) => setMarketCap(e.target.value)}
+                    disabled={!selectedFilter || isFiltering}
+                  />
+                  <div style={{ minWidth: "180px" }}>
+                    <Select
+                      options={capUnitOptions}
+                      value={capUnitOptions.find((opt) => opt.value === capUnit)}
+                      onChange={(selected) => setCapUnit(selected.value)}
+                      isDisabled={!selectedFilter || isFiltering}
+                      isSearchable={false}
+                      styles={{ control: (base) => ({ ...base, height: "100%" }) }}
+                    />
+                  </div>
+                </div>
+                <div className="text-muted mt-1">
+                  Current: <strong>{marketCap || "–"} { {
+                    M: "Million",
+                    B: "Billion",
+                    T: "Trillion"
+                  }[capUnit]} USD</strong>
+                </div>
+              </div>
+            </div>
+            <div className="d-flex justify-content-end mt-3">
               <button
-                className="btn btn-primary fw-semibold"
+                className="btn btn-primary"
                 onClick={applyFilter}
-                disabled={isFiltering}
+                disabled={!selectedFilter || isFiltering}
               >
-                Apply
+                Apply Filter
               </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
+      {/* Active Filter Badges */}
       {(selectedFilter || marketCap) && (
         <div className="text-center mb-4">
           {selectedFilter && (
@@ -265,7 +222,11 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
           )}
           {marketCap && (
             <span className="badge bg-primary">
-              Market Cap &gt; {marketCap}
+              Market Cap ≥ {marketCap} { {
+                M: "Million",
+                B: "Billion",
+                T: "Trillion"
+              }[capUnit] }
               <FaTimes
                 className="ms-2"
                 style={{ cursor: "pointer" }}
@@ -279,6 +240,7 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
         </div>
       )}
 
+      {/* Start Button */}
       <div className="text-center mt-3">
         <button
           className="btn btn-primary btn-lg px-5"
