@@ -2,17 +2,18 @@ services:
   influxdb:
     image: influxdb:latest
     container_name: influxdb
-    ports:
-      - "8086:8086"
-    volumes:
-      - influxdb-data:/var/lib/influxdb
     environment:
+      - CONTAINER_NAME=influxdb
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=admin
       - DOCKER_INFLUXDB_INIT_PASSWORD=adminadmin
       - DOCKER_INFLUXDB_INIT_ORG=HSAA
       - DOCKER_INFLUXDB_INIT_BUCKET=25s-cd-teamb
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=mySuperSecretToken123!
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb
     restart: always
 
   influx-client:
@@ -20,29 +21,28 @@ services:
       context: ./backend/microservices
       dockerfile: Influx/Dockerfile
     container_name: influx-client
-    depends_on:
-      - influxdb
     environment:
+      - CONTAINER_NAME=influx-client
       - INFLUXDB_URL=http://influxdb:8086/
       - INFLUXDB_TOKEN=mySuperSecretToken123!
       - INFLUXDB_ORG=HSAA
       - INFLUXDB_BUCKET=25s-cd-teamb
       - PYTHONPATH=/app
+    depends_on:
+      - influxdb
     restart: "no"
-
-
-
 
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
+    environment:
+      - CONTAINER_NAME=grafana
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=adminadmin
     ports:
       - "3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=adminadmin
     depends_on:
       - influxdb
     restart: always
@@ -50,6 +50,8 @@ services:
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant
+    environment:
+      - CONTAINER_NAME=qdrant
     ports:
       - "6333:6333"    # REST API
       - "6334:6334"    # gRPC
@@ -60,6 +62,8 @@ services:
   redis:
     image: redis
     container_name: redis
+    environment:
+      - CONTAINER_NAME=redis
     ports:
       - "6379:6379"
     volumes:
@@ -69,6 +73,8 @@ services:
   api-fetcher:
     build: ./backend/microservices/api_fetcher
     container_name: api-fetcher
+    environment:
+      - CONTAINER_NAME=api-fetcher
     expose:
       - "8001"      
     restart: always
@@ -76,6 +82,8 @@ services:
   rag-chatbot:
     build: ./backend/microservices/rag_chatbot
     container_name: rag-chatbot
+    environment:
+      - CONTAINER_NAME=rag-chatbot
     expose:
       - "8002"
     depends_on:
@@ -86,6 +94,8 @@ services:
   api-gateway:
     build: ./backend/microservices/api_gateway
     container_name: api-gateway
+    environment:
+      - CONTAINER_NAME=api-gateway
     expose:
       - "8000"
     depends_on:
@@ -100,6 +110,8 @@ services:
   frontend:
     build: ./frontend
     container_name: frontend
+    environment:
+      - CONTAINER_NAME=frontend
     expose:
      - "4000"
     depends_on:
@@ -109,6 +121,8 @@ services:
   nginx:
     image: nginx:latest
     container_name: nginx
+    environment:
+      - CONTAINER_NAME=nginx
     ports:
       - "80:80"
     volumes:
@@ -124,12 +138,28 @@ services:
       context:  ./backend/microservices
       dockerfile: forecasting/Dockerfile
     container_name: forecasting
+    environment:
+      - CONTAINER_NAME=forecasting
     expose:
       - "8003"
     depends_on:
       - influxdb
       - qdrant
       - redis
+    restart: always
+
+  fluent-bit:
+    image: fluent/fluent-bit:latest
+    container_name: fluent-bit
+    environment:
+      - CONTAINER_NAME=fluent-bit
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
+      - ./enrich_docker_log.lua:/fluent-bit/etc/enrich_docker_log.lua:ro
+    depends_on:
+      - influxdb
     restart: always
 
 volumes:
