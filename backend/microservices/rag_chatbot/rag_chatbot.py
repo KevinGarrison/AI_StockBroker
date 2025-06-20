@@ -1,32 +1,34 @@
-from langchain_core.documents import Document
-from langchain_qdrant import QdrantVectorStore
-from qdrant_client.http.models import VectorParams, Distance
 from langchain.text_splitter import MarkdownTextSplitter, TokenTextSplitter
-from qdrant_client import QdrantClient
-from langchain_openai import OpenAIEmbeddings
+from qdrant_client.http.models import VectorParams, Distance
 from langchain.output_parsers import PydanticOutputParser
-from dataclasses import dataclass
-import json
-from openai import AsyncOpenAI
-import os
-from dotenv import load_dotenv
-from uuid import uuid4
-import httpx
-from bs4 import XMLParsedAsHTMLWarning
-import logging
-import warnings
-import pandas as pd
-import redis
 from pydantic import BaseModel, ValidationError
-from typing import List, Optional
-import tempfile
+from langchain_qdrant import QdrantVectorStore
+from langchain_openai import OpenAIEmbeddings
+from langchain_core.documents import Document
+from bs4 import XMLParsedAsHTMLWarning
+from qdrant_client import QdrantClient
+from dataclasses import dataclass
 from fastapi import HTTPException
+from openai import AsyncOpenAI
+from dotenv import load_dotenv
+from typing import List
+from uuid import uuid4
 from fpdf import FPDF
+import pandas as pd
+import tempfile
 import requests
+import warnings
+import logging
+import redis
+import json
+import os
 
 
 logger = logging.getLogger(__name__)
+
+
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+
 
 load_dotenv()
 
@@ -50,6 +52,8 @@ class BrokerAnalysisOutput(BaseModel):
 
 @dataclass
 class RAG_Chatbot:
+
+
     def connect_to_qdrant(self, host: str = None, port: str = None) -> QdrantClient:
         try:
             host = str(host or os.getenv("QDRANT_HOST"))
@@ -60,6 +64,7 @@ class RAG_Chatbot:
         except Exception as e:
             logger.error(f"[Qdrant ERROR] Connection failed: {e}")
             raise
+
 
     def connect_to_redis(
         self, host: str = None, port: int = None, db: int = 0, password: str = None
@@ -76,6 +81,7 @@ class RAG_Chatbot:
             logger.error(f"[Redis ERROR] Connection failed: {e}")
             raise
 
+
     def delete_vec_docs(self, client: QdrantClient, collection_name: str = None):
         try:
             collection_name = collection_name or os.getenv("COLLECTION_NAME")
@@ -84,12 +90,14 @@ class RAG_Chatbot:
         except Exception as e:
             logger.error(f"[Qdrant ERROR] Couldn't delete collection: {e}")
 
+
     def delete_cached_docs(self, client: redis.Redis):
         try:
             client.flushdb()
             logger.info("[Redis] Deleted cache")
         except Exception as e:
             logger.error(f"[Redis ERROR] Couldn't delete collection: {e}")
+
 
     def process_most_important_form_to_qdrant(
         self,
@@ -170,12 +178,14 @@ class RAG_Chatbot:
             logger.error(f"[Qdrant ERROR] {e}")
             raise
 
+
     def query_qdrant(self, prompt: str, vector_store: QdrantVectorStore) -> Document:
         try:
             return vector_store.similarity_search(prompt, k=4)
         except Exception as e:
             logger.error(f"[Qdrant ERROR] {e}")
             return []
+
 
     def store_docs_by_filing_type_list(
         self, context_docs: pd.DataFrame, redis_client: redis.Redis
@@ -216,6 +226,7 @@ class RAG_Chatbot:
             logger.error(f"[REDIS ERROR] {e}")
             raise
 
+
     def get_first_available_form_content(
         self, redis_client: redis.Redis, form_rank: list
     ) -> tuple:
@@ -237,6 +248,7 @@ class RAG_Chatbot:
                     doc = {"raw_content": item}
                 return form, doc
         return None, None
+
 
     def get_all_docs_from_redis(self, redis_client):
         forms_json = redis_client.get("available_forms")
@@ -289,6 +301,7 @@ class RAG_Chatbot:
             file_path = tmp_file.name
 
         return file_path, f"{ticker}_{first_form}_sec_report.htm"
+
 
     def generate_broker_analysis_pdf(self, data: dict, ticker: str) -> str:
         logo_path = None
@@ -374,6 +387,7 @@ class RAG_Chatbot:
             os.remove(logo_path)
 
         return tmp_file.name
+
 
     async def gpt4o_broker_analysis(
         self,

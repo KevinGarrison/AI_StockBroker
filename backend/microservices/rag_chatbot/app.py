@@ -1,18 +1,14 @@
-from rag_chatbot import RAG_Chatbot
-from fastapi import FastAPI, HTTPException, Body
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel
 from contextlib import asynccontextmanager
-from pathlib import Path
+from rag_chatbot import RAG_Chatbot
+from pydantic import BaseModel
+import pandas as pd
 import logging
 import asyncio
-import time
-import pandas as pd
 import json
 import os
-import io
-from weasyprint import HTML
 
 
 logging.basicConfig(
@@ -20,22 +16,25 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
+
 logger = logging.getLogger(__name__)
-
-rag_bot = RAG_Chatbot()
-
-redis_db = {}
-vector_db = {}
-
-SEC_FORM_RANK = [
-    "10-K", "10-Q", "8-K", "S-1", "DEF 14A", "20-F", "6-K", "13D/13G", "4", "S-8"
-]
 
 
 class ContextData(BaseModel):
     yf_stock_data: dict
     base_sec_df: dict
     forecast: dict
+
+
+SEC_FORM_RANK = [
+    "10-K", "10-Q", "8-K", "S-1", "DEF 14A", "20-F", "6-K", "13D/13G", "4", "S-8"
+]
+
+
+rag_bot = RAG_Chatbot()
+
+redis_db = {}
+vector_db = {}
 
 
 @asynccontextmanager
@@ -52,6 +51,7 @@ async def lifespan(app: FastAPI):
         redis_db["client"].close()
         vector_db.clear()
         redis_db.clear()
+
 
 app = FastAPI(lifespan=lifespan)
 
@@ -140,22 +140,6 @@ async def get_reference_files():
         logger.error(f"[REDIS ERROR] Failed to fetch reference docs - {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve documents from Redis.")
 
-@app.get("/reference-doc-pdf")
-def reference_doc_pdf():
-    client = redis_db["client"]
-
-    html_file_path, base_filename = rag_bot.download_referenz_doc_from_redis(client)
-    
-    pdf_io = io.BytesIO()
-    HTML(filename=html_file_path).write_pdf(pdf_io)
-    pdf_io.seek(0)
-
-    pdf_filename = base_filename.replace('.htm', '.pdf')
-    return StreamingResponse(
-        pdf_io,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={pdf_filename}"}
-    )
 
 @app.get("/download-refdoc-redis")
 def download_refdoc_endpoint():
@@ -168,6 +152,7 @@ def download_refdoc_endpoint():
         media_type="text/html",
         background=lambda: os.remove(file_path) 
     )
+
 
 @app.get("/download-broker-pdf/{ticker}")
 def download_broker_pdf(ticker:str):
