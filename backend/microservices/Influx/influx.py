@@ -2,7 +2,6 @@ from influxdb_client import InfluxDBClient, Point, WriteOptions
 from influxdb_client.client.write_api import ASYNCHRONOUS
 from datetime import timedelta, datetime
 from dataclasses import dataclass
-from dotenv import load_dotenv
 import pandas as pd
 import logging
 import asyncio
@@ -11,9 +10,6 @@ import os
 
 
 logger = logging.getLogger(__name__)
-
-
-load_dotenv()
 
 
 @dataclass

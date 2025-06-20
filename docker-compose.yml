@@ -28,9 +28,11 @@ services:
       - INFLUXDB_ORG=HSAA
       - INFLUXDB_BUCKET=25s-cd-teamb
       - PYTHONPATH=/app
+    expose:
+      - "8004"
     depends_on:
       - influxdb
-    restart: "no"
+    restart: always
 
   grafana:
     image: grafana/grafana:latest
