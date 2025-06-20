@@ -56,7 +56,7 @@ app = FastAPI(lifespan=lifespan)
 @app.get("/data-ingest-yf-to-influx")
 async def ingest_data():
     async with httpx.AsyncClient() as client:
-        response = await client.get("http://localhost:8004/collect-stock-history-from-yfinance", timeout=None)
+        response = await client.get("http://influx-client:8004/collect-stock-history-from-yfinance", timeout=None)
         if response.status_code == 200:
             logger.info('[API-GATEWAY] Request Yahoo Finance data collection')
             return {'Status': 'Ingested data successfully'}
@@ -100,7 +100,7 @@ async def second_filter(
             )
 
             response = await client.get(
-                "http://localhost:8001/filter-market-cap/",
+                "http://api-fetcher:8001/filter-market-cap/",
                 params=params,
                 timeout=None
             )
@@ -128,15 +128,15 @@ async def companies_df():
 @app.get("/company-facts/{ticker}")
 async def company_facts(ticker: str):
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"http://localhost:8001/yfinance-company-facts/{ticker}", timeout=None)
+        response = await client.get(f"http://api-fetcher:8001/yfinance-company-facts/{ticker}", timeout=None)
         logger.info('[API-GATEWAY] requesting company facts from yahoo finance')
         return response.json()
 
 
-@app.get("/company-news/{ticker}") ############## Check #############
+@app.get("/company-news/{ticker}") 
 async def company_news(ticker: str):
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"http://localhost:8001/company-news/{ticker}", timeout=None)
+        response = await client.get(f"http://api-fetcher:8001/company-news/{ticker}", timeout=None)
         logger.info('[API-GATEWAY] requesting yahoo finance news')
         return response.json()
 
@@ -144,7 +144,7 @@ async def company_news(ticker: str):
 @app.get("/stock-history/{ticker}")
 async def stock_history(ticker: str):
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"http://localhost:8004/history/{ticker}", timeout=None)
+        response = await client.get(f"http://influx-client:8004/history/{ticker}", timeout=None)
         logger.info('[API-GATEWAY] requesting yahoo finance stock-history from influx')
         return response.json()
 
@@ -152,7 +152,7 @@ async def stock_history(ticker: str):
 @app.get("/delete-cache")
 async def delete_cache():
     async with httpx.AsyncClient() as client:
-        response = await client.get("http://localhost:8002/delete-cached-docs", timeout=None)
+        response = await client.get("http://rag-chatbot:8002/delete-cached-docs", timeout=None)
         logger.info('[API-GATEWAY] deleting cached docs')
         return response.json()
 
@@ -161,13 +161,13 @@ async def delete_cache():
 async def stock_broker_analysis(ticker: str):
     async with httpx.AsyncClient() as client:
         # Step 1: SEC Data
-        all_company_data = await client.get(f"http://localhost:8001/company-context/{ticker}", timeout=None)
+        all_company_data = await client.get(f"http://api-fetcher:8001/company-context/{ticker}", timeout=None)
         company_json = all_company_data.json()
         logger.info("[AI Result 1]: SEC files pulled")
 
         forecast_json = {}
         try:
-            forecast = await client.get(f"http://localhost:8003/forecast/{ticker}", timeout=None)
+            forecast = await client.get(f"http://forecasting:8003/forecast/{ticker}", timeout=None)
             if forecast.status_code == 200:
                 forecast_json = forecast.json()
                 forecast_data = forecast_json.get('forecast', [])
@@ -178,7 +178,7 @@ async def stock_broker_analysis(ticker: str):
                 logger.info(f"[AI Result 2]: Forecast [{forecast_data}]")
 
                 influx_post = await client.post(
-                    f"http://localhost:8004/write-forecast-to-influx/{ticker}",
+                    f"http://influx-client:8004/write-forecast-to-influx/{ticker}",
                     json={"history": forecast_data},
                     timeout=None
                 )
@@ -193,7 +193,7 @@ async def stock_broker_analysis(ticker: str):
 
         try:
             response = await client.post(
-                f"http://localhost:8002/relevant-sec-files/{ticker}",
+                f"http://rag-chatbot:8002/relevant-sec-files/{ticker}",
                 json=company_json,
                 timeout=None
             )
@@ -209,7 +209,7 @@ async def stock_broker_analysis(ticker: str):
 @app.get("/forecast/{ticker}")
 async def get_forecast(ticker:str):
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"http://localhost:8004/forecast/{ticker}", timeout=None)
+        response = await client.get(f"http://influx-client:8004/forecast/{ticker}", timeout=None)
         logger.info('[API-GATEWAY] requesting forecast of Neural Network predictor')
         return response.json()
 
@@ -217,7 +217,7 @@ async def get_forecast(ticker:str):
 @app.get("/reference-docs")
 async def get_reference_files():
     async with httpx.AsyncClient() as client:
-        response = await client.get("http://localhost:8002/reference-docs-from-analysis", timeout=None)
+        response = await client.get("http://rag-chatbot:8002/reference-docs-from-analysis", timeout=None)
         logger.info('[API-GATEWAY] requesting reference docs')
         return response.json()
 
@@ -225,7 +225,7 @@ async def get_reference_files():
 @app.get("/download-reference-doc")
 async def download_reference_doc():
     async with httpx.AsyncClient() as client:
-        resp = await client.get("http://localhost:8002/download-refdoc-redis", timeout=None)
+        resp = await client.get("http://rag-chatbot:8002/download-refdoc-redis", timeout=None)
         logger.info('[API-GATEWAY] downloading reference docs from redis cache')
         headers = {
             "Content-Disposition": resp.headers.get("content-disposition", "attachment; filename=reference.htm"),
@@ -237,7 +237,7 @@ async def download_reference_doc():
 @app.get("/download-broker-pdf/{ticker}")
 async def download_broker_pdf(ticker:str):
     async with httpx.AsyncClient() as client:
-        resp = await client.get(f"http://localhost:8002/download-broker-pdf/{ticker}", timeout=None)
+        resp = await client.get(f"http://rag-chatbot:8002/download-broker-pdf/{ticker}", timeout=None)
 
         if resp.status_code != 200:
             return Response(content=resp.text, status_code=resp.status_code)
@@ -253,7 +253,7 @@ async def download_broker_pdf(ticker:str):
 async def proxy_logo(ticker: str):
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"http://localhost:8001/get-logo/{ticker}", timeout=20)
+            response = await client.get(f"http://api-fetcher:8001/get-logo/{ticker}", timeout=20)
 
         if response.status_code != 200:
             try:
@@ -277,6 +277,6 @@ async def proxy_logo(ticker: str):
 @app.get("/delete-forecasts")
 async def delete_forecast():
     async with httpx.AsyncClient() as client:
-        response = await client.get("http://localhost:8004/delete-forecasts", timeout=None)
+        response = await client.get("http://influx-client:8004/delete-forecasts", timeout=None)
         logger.info('[API-GATEWAY] deleting forecast in influxDB')
         return response.json()

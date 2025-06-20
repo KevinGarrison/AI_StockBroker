@@ -11,11 +11,11 @@ logger = logging.getLogger(__name__)
 async def prepare_forecast_data(ticker: str) -> pd.DataFrame:
     try:
         async with httpx.AsyncClient() as client:
-            res_history = await client.get(f"http://localhost:8004/history/{ticker}", timeout=None)
+            res_history = await client.get(f"http://influx-client:8004/history/{ticker}", timeout=None)
             if res_history.status_code != 200:
                 raise Exception("Stock history unavailable")
             price_data = res_history.json()
-            res_facts = await client.get(f"http://localhost:8001/yfinance-company-facts/{ticker}", timeout=None)
+            res_facts = await client.get(f"http://api-fetcher:8001/yfinance-company-facts/{ticker}", timeout=None)
 
             if res_facts.status_code != 200:
                 raise Exception("Company facts unavailable")

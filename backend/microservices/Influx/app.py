@@ -51,7 +51,7 @@ app = FastAPI(lifespan=lifespan)
 @app.get("/collect-stock-history-from-yfinance")
 async def collect_stock_history():
     async with httpx.AsyncClient() as client:
-        response = await client.get("http://localhost:8000/companies-for-dropdown", timeout=None)
+        response = await client.get("http://api-gateway:8000/companies-for-dropdown", timeout=None)
         if response.status_code != 200:
             return {"error": "Failed to fetch companies"}
         companies = response.json()

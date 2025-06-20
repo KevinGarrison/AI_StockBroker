@@ -45,7 +45,7 @@ class InfluxDBHandler:
             async def process_ticker(ticker):
                 async with semaphore:
                     try:
-                        res = await http_client.get(f"http://localhost:8001/stock-history/{ticker}", timeout=None)
+                        res = await http_client.get(f"http://api-fetcher:8001/stock-history/{ticker}", timeout=None)
                         if res.status_code != 200:
                             logger.warning(f"Stock history unavailable for {ticker}: {res.status_code}")
                             return

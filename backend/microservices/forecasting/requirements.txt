@@ -1,5 +1,4 @@
 fastapi
-uvicorn
 httpx
 pandas
 numpy
@@ -8,3 +7,4 @@ scipy
 torch
 torchvision
 neuralforecast
+uvicorn[standard]

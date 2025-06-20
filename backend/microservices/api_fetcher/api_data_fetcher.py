@@ -427,7 +427,7 @@ class API_Fetcher:
             # Step 1: Validate & find ticker
             task_1 = time.time()
             async with httpx.AsyncClient() as client:
-                response = await client.get("http://localhost:8000/companies-df", timeout=None)
+                response = await client.get("http://api-gateway:8000/companies-df", timeout=None)
                 all_companies = response.json()
                 all_companies_df = pd.DataFrame(all_companies)
             logger.info(f"[{ticker}] Step 1 - Fetched company data ({len(all_companies_df)} rows) - {time.time() - task_1:.2f}s")
