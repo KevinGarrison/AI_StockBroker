@@ -21,7 +21,7 @@ union_tickers = {}
 async def lifespan(app: FastAPI):
     async with httpx.AsyncClient() as client:
         logger.info("[API-GATEWAY] Lifespan starting")
-        response = await client.get("http://localhost:8001/companies", timeout=None)
+        response = await client.get("http://api-fetcher:8001/companies", timeout=None)
 
         logger.info("[API-GATEWAY] Startup task: building union of tickers for second filter")
 
