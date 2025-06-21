@@ -1,24 +1,10 @@
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y curl
-
 WORKDIR /app
 
-RUN mkdir -p /app/api_fetcher
+COPY . /app
 
-COPY Influx/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    TMPDIR=/var/tmp pip install --no-cache-dir -r requirements.txt
 
-
-
-COPY forecasting/ /app/forecasting/
-
-COPY api_fetcher/api_data_fetcher.py /app/api_fetcher/api_data_fetcher.py
-COPY Influx/ /app/
-
-
-RUN chmod +x /app/wait-for-influx.sh
-
-ENV PYTHONPATH=/app:/app/forecasting
-
-CMD ["./wait-for-influx.sh", "http://influxdb:8086", "python", "influx.py"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8004"]

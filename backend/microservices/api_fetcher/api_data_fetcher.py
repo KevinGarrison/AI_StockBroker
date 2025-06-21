@@ -1,46 +1,50 @@
-from dataclasses import dataclass
-import httpx
-import asyncio
-import pandas as pd
-from dotenv import load_dotenv
-import os
-from io import BytesIO
-import yfinance as yf
-from yahoo_fin import stock_info as si
-import yahooquery as yq
 from docling.document_converter import DocumentConverter
 from docling.datamodel.base_models import DocumentStream
+from dataclasses import dataclass, field
+from bs4 import XMLParsedAsHTMLWarning
+from urllib.parse import urlparse
+from yahooquery import Screener
+from typing import List, Tuple
+from dotenv import load_dotenv
+from bs4 import BeautifulSoup
+import yahooquery as yq
+from io import BytesIO
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import requests
+import warnings
+import logging
+import asyncio
+import httpx
 import json
 import html
-from bs4 import BeautifulSoup
-from bs4 import XMLParsedAsHTMLWarning
-import logging
-import warnings
 import time
-import numpy as np
-from urllib.parse import urlparse
-import requests
+import re
+import os
 
 
 logger = logging.getLogger(__name__)
 
+
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+
 
 load_dotenv()
 
+
 @dataclass
 class API_Fetcher:
-    
-    
-    async def fetch_all_major_indices(self)->set[str]:
-        dow = await asyncio.to_thread(si.tickers_dow)
-        nasdaq = await asyncio.to_thread(si.tickers_nasdaq)
-        sp500 = await asyncio.to_thread(si.tickers_sp500)
-        all_tickers =  dow + nasdaq + sp500
-        logger.info("[Tickers Y Finance] %s", all_tickers[:5])
-        return all_tickers
+    max_concurrent: int = 10
+    retry_attempts: int = 3
+    retry_delay: float = 1.5
+    _semaphore: asyncio.Semaphore = field(init=False)
 
-        
+
+    def __post_init__(self):
+        self._semaphore = asyncio.Semaphore(self.max_concurrent)
+    
+
     async def fetch_company_cik_ticker_title(self)->pd.DataFrame:
         try:
             headers = {'User-Agent': os.environ.get('USER_AGENT_SEC')}
@@ -69,14 +73,83 @@ class API_Fetcher:
             logger.exception(f"Failed 'fetch_company_cik_ticker_title': {e}")    
     
     
-    async def get_available_company_data(self)->tuple[list, pd.DataFrame]:
-        all_tickers = await self.fetch_all_major_indices()
+    def filter_stocks_screeners_sectors(self, categories: List[str]) -> List[str]:
+        exclude_keywords = (
+            "crypto",
+            "etf",
+            "mutual_fund",
+            "funds",
+            "options",
+            "cryptocurrencies",
+            "loser",
+            "bond",
+            "commodity",
+            "forex",
+            "precious",
+            "metals",
+            "coal",
+            "uranium",
+            "gold",
+            "silver",
+            "oil",
+            "gas",
+        )
+
+        include_patterns = re.compile(
+            r"""^(
+                day_gainers(?!_)|
+                most_actives(?!_)|
+                top_stocks_.*|
+                most_(institutionally|shorted).*stocks|
+                analyst_.*stocks|
+                bullish_stocks_right_now|
+                bearish_stocks_right_now|
+                strong_undervalued_stocks|
+                growth_technology_stocks|
+                upside_breakout_stocks_daily|
+                morningstar_five_star_stocks|
+                latest_analyst_upgraded_stocks|
+                stocks_.*|
+                undervalued_.*stocks|
+                fifty_two_wk_(gainers|losers)$|
+                the_acquirers_multiple(_(asia|europe))?
+            )$""",
+            re.IGNORECASE | re.VERBOSE,
+        )
+
+        return [
+            cat for cat in categories
+            if include_patterns.match(cat) and not any(ex in cat for ex in exclude_keywords)
+        ]
+
+
+    async def get_available_company_data(self) -> Tuple[pd.DataFrame, List]:
+        screener_dict = Screener().available_screeners
+        screener_ids = [
+            s for s in self.filter_stocks_screeners_sectors(screener_dict)
+            if isinstance(s, str) and s
+        ]
+
+        logger.info(f"[CompanyData] Found {len(screener_ids)} screener IDs from YahooQuery")
+
+        try:
+            tickers, screeners, ticker_screener = await self.get_tickers_from_screeners_async(screener_ids)
+        except Exception as e:
+            logger.error(f"[CompanyData] Error fetching tickers from screeners: {e}")
+            return pd.DataFrame(), []
+
         company_ids = await self.fetch_company_cik_ticker_title()
-        common = set(all_tickers) & set(company_ids["ticker"])
-        subset_company_cik_ticker_title = company_ids[company_ids["ticker"].isin(common)]
-        logger.info("[Union Ticker]: %s", subset_company_cik_ticker_title[:3])
-        return subset_company_cik_ticker_title
-    
+        if company_ids.empty:
+            logger.warning("[CompanyData] Company ID dataset is empty.")
+            return pd.DataFrame(), []
+        
+        valid_tickers = company_ids["ticker"].to_list()
+        common = set(valid_tickers) & set(tickers)
+        subset = company_ids[company_ids["ticker"].isin(common)].copy()
+
+        return subset, screeners, ticker_screener
+
+
     async def get_company_news(self, selected_ticker)->json:
         try:    
             if not selected_ticker:
@@ -85,92 +158,115 @@ class API_Fetcher:
             return news        
         except Exception as e:
             print(f"Failed 'fetch_stock_data_yf': {e}")
+
     
-    async def fetch_selected_stock_data_yf(self, selected_ticker:str=None, period:str="10y", interval:str="1mo") -> dict[str, any]:
+    async def fetch_selected_stock_history_yq(
+        self,
+        selected_ticker: str,
+        period: str = "10y",
+        interval: str = "1mo"
+    ) -> dict[str, any]:
+        if not selected_ticker:
+            raise ValueError("Ticker symbol must be provided.")
+        
+        def _worker() -> dict[str, any]:
+            t = yq.Ticker(selected_ticker)
+            hist_df = t.history(period=period, interval=interval)
+
+            price_series = None
+            if isinstance(hist_df, pd.DataFrame) and not hist_df.empty and "close" in hist_df.columns:
+                try:
+                    price_series = hist_df.loc[selected_ticker, "close"]
+                except KeyError:
+                    price_series = hist_df["close"]
+
+            return {"price_history": price_series}
+
         try:
-            if not selected_ticker:
-                raise ValueError(f"Fund '{selected_ticker}' not found.")
+            return await asyncio.to_thread(_worker)
+        except Exception as exc:
+            logger.error("fetch_selected_stock_history_yq failed: %s", exc, exc_info=True)
+            return {"error": str(exc)}
 
-            def _fetch_data():    
-                yf_ticker = yf.Ticker(selected_ticker)
-                hist = yf_ticker.history(period=period, interval=interval)
-                info = yf_ticker.info
-                news = yf_ticker.get_news()
 
-                return {
-                    "ticker": selected_ticker,
-                    "name": info.get("longName"),
-                    "expense_ratio": info.get("expenseRatio"),
-                    "price_history": hist.get('Close'),
-                    
-                    # Core Profile
-                    "sector": info.get("sector"),
-                    "industry": info.get("industry"),
-                    "website": info.get("website"),
-                    "fullTimeEmployees": info.get("fullTimeEmployees"),
+    async def fetch_selected_stock_facts_yq(self, selected_ticker: str) -> dict[str, any]:
+        symbol = selected_ticker
+        if not symbol:
+            raise ValueError("Ticker symbol must be provided.")
+        
+        def _worker() -> dict[str, any]:
+            t = yq.Ticker(symbol)
 
-                    # Market Metrics
-                    "current_price": info.get("currentPrice"),
-                    "market_cap": info.get("marketCap"),
-                    "volume": info.get("volume"),
-                    "beta": info.get("beta"),
+            # -- blocks come back as {symbol: {...}}
+            prof = (t.summary_profile or {}).get(symbol, {})
+            det  = (t.summary_detail  or {}).get(symbol, {})
+            fin  = (t.financial_data  or {}).get(symbol, {})
+            ks   = (t.key_stats       or {}).get(symbol, {})
 
-                    # Valuation
-                    "trailing_pe": info.get("trailingPE"),
-                    "forward_pe": info.get("forwardPE"),
-                    "price_to_book": info.get("priceToBook"),
-                    "peg_ratio": info.get("trailingPegRatio"),
-                    "price_to_sales": info.get("priceToSalesTrailing12Months"),
+            news_block = yf.Ticker(symbol).get_news()
 
-                    # Earnings
-                    "eps_trailing": info.get("epsTrailingTwelveMonths"),
-                    "eps_forward": info.get("epsForward"),
-                    "earnings_growth": info.get("earningsGrowth"),
-                    "revenue_growth": info.get("revenueGrowth"),
-                    "revenue": info.get("totalRevenue"),
-                    "net_income": info.get("netIncomeToCommon"),
+            return {
+                # --- identification ---
+                "ticker":           symbol,
+                "company_name":     prof.get("longBusinessSummary"),  
+                "sector":           prof.get("sector"),
+                "industry":         prof.get("industry"),
+                "website":          prof.get("website"),
+                "employees":        prof.get("fullTimeEmployees"),
 
-                    # Dividends
-                    "dividend_yield": info.get("dividendYield"),
-                    "dividend_rate": info.get("dividendRate"),
-                    "payout_ratio": info.get("payoutRatio"),
-                    "ex_dividend_date": info.get("exDividendDate"),
+                # --- market metrics ---
+                "current_price":    fin.get("currentPrice"),
+                "market_cap":       det.get("marketCap"),
+                "beta":             ks.get("beta"),
+                "volume":           det.get("volume"),
 
-                    # Performance
-                    "fifty_two_week_low": info.get("fiftyTwoWeekLow"),
-                    "fifty_two_week_high": info.get("fiftyTwoWeekHigh"),
-                    "fifty_two_week_change_percent": info.get("fiftyTwoWeekChangePercent"),
-                    "average_volume": info.get("averageVolume"),
+                # --- valuation ---
+                "trailing_pe":      det.get("trailingPE"),
+                "forward_pe":       ks.get("forwardPE"),
+                "price_to_book":    ks.get("priceToBook"),
 
-                    # Analyst Sentiment
-                    "recommendation_mean": info.get("recommendationMean"),
-                    "recommendation_key": info.get("recommendationKey"),
-                    "target_mean_price": info.get("targetMeanPrice"),
-                    "target_high_price": info.get("targetHighPrice"),
-                    "target_low_price": info.get("targetLowPrice"),
+                # --- dividends ---
+                "dividend_yield":   det.get("dividendYield"),
+                "dividend_rate":    det.get("dividendRate"),
+                "ex_dividend":      det.get("exDividendDate"),
 
-                    # Balance Sheet / Risk
-                    "total_cash": info.get("totalCash"),
-                    "total_debt": info.get("totalDebt"),
-                    "current_ratio": info.get("currentRatio"),
-                    "quick_ratio": info.get("quickRatio"),
-                    "debt_to_equity": info.get("debtToEquity"),
+                # --- performance ---
+                "52w_high":         det.get("fiftyTwoWeekHigh"),
+                "52w_low":          det.get("fiftyTwoWeekLow"),
+                "52w_change_pct":   ks.get("52WeekChange"),
 
-                    # Margins & Returns
-                    "gross_margins": info.get("grossMargins"),
-                    "operating_margins": info.get("operatingMargins"),
-                    "profit_margins": info.get("profitMargins"),
-                    "return_on_assets": info.get("returnOnAssets"),
-                    "return_on_equity": info.get("returnOnEquity"),
+                # --- analyst targets ---
+                "target_mean":      fin.get("targetMeanPrice"),
+                "target_high":      fin.get("targetHighPrice"),
+                "target_low":       fin.get("targetLowPrice"),
+                "recommendation_mean": fin.get("recommendationMean"),
 
-                    # News
-                    "news": news
-                }
+                # --- cash & leverage ---
+                "total_cash":       fin.get("totalCash"),
+                "total_debt":       fin.get("totalDebt"),
+                "debt_to_equity":   fin.get("debtToEquity"),
+                "current_ratio":    fin.get("currentRatio"),
+                "quick_ratio":      fin.get("quickRatio"),
 
-            return await asyncio.to_thread(_fetch_data)
+                # --- margins & returns ---
+                "gross_margins":    fin.get("grossMargins"),
+                "operating_margins":fin.get("operatingMargins"),
+                "profit_margins":   fin.get("profitMargins"),
+                "roa":              fin.get("returnOnAssets"),
+                "roe":              fin.get("returnOnEquity"),
+                "eps_forward":      ks.get("forwardEps") or fin.get("forwardEps"),
+                "revenue_growth":   fin.get("revenueGrowth"),
 
-        except Exception as e:
-            print(f"Failed 'fetch_stock_data_yf': {e}")
+                # --- news ---
+                "news":             news_block,    
+            }
+
+        # run the heavy work in a thread so the coroutine stays non-blocking
+        try:
+            return await asyncio.to_thread(_worker)
+        except Exception as exc:
+            logger.error("get_yq failed: %s", exc, exc_info=True)
+            return {"error": str(exc)}
 
 
     async def fetch_selected_company_details_and_filing_accessions(self, selected_cik)->tuple[dict[str, any], dict[str, any], dict[str, any]]:
@@ -266,7 +362,8 @@ class API_Fetcher:
             print(f"Unexpected error in 'fetch_company_filings': {e}")
 
         return b""
-    
+
+
     async def fetch_all_filings(self, base_sec_df: pd.DataFrame=None) -> pd.Series:
         all_filings = []
         for _, row in base_sec_df.iterrows():
@@ -324,14 +421,17 @@ class API_Fetcher:
 
 
     async def preprocess_and_pull_context_sec_yf(self, ticker: str = None):
-        start_time = time.time()
         all_data = {}
 
         try:
             # Step 1: Validate & find ticker
             task_1 = time.time()
-            all_companies_df = await self.get_available_company_data()
+            async with httpx.AsyncClient() as client:
+                response = await client.get("http://api-gateway:8000/companies-df", timeout=None)
+                all_companies = response.json()
+                all_companies_df = pd.DataFrame(all_companies)
             logger.info(f"[{ticker}] Step 1 - Fetched company data ({len(all_companies_df)} rows) - {time.time() - task_1:.2f}s")
+            logger.info(f"[{ticker}] - Company df ({all_companies_df.head()}")
             datapoint = all_companies_df[all_companies_df['ticker'] == ticker]
 
             if datapoint.empty:
@@ -344,8 +444,7 @@ class API_Fetcher:
 
             # Step 2: Yahoo Finance Data
             task_2 = time.time()
-            yf_data = await self.fetch_selected_stock_data_yf(selected_ticker=ticker)
-            yf_data.pop('price_history', None)
+            yf_data = await self.fetch_selected_stock_facts_yq(selected_ticker=ticker)
             all_data['yf_stock_data'] = yf_data
             logger.info(f"[{ticker}] Step 2 - Fetched Yahoo Finance data - {time.time() - task_2:.2f}s")
 
@@ -394,110 +493,88 @@ class API_Fetcher:
         except Exception as e:
             logger.error(f"[{ticker}] ERROR in preprocess_and_pull_context_sec_yf: {e}", exc_info=True)
             raise
+ 
 
-    
-    def is_relevant_screener(self, scr):
-        EXCLUDE_KEYWORDS = [
-            "etf", "fund", "mutual", "bond", "commodity", "crypto",
-            "currency", "option", "futures", "yield", "day_losers",
-            "day_losers_br", "day_losers_de", "day_losers_dji", "day_losers_es",
-            "day_losers_fr","day_losers_gb", "day_losers_hk", "day_losers_it",
-            "day_losers_ndx", "day_losers_nz", "day_losers_sg"
-        ]
-        REGION_KEYWORDS = [
-            "europe", "asia", "latam", "china", "japan", "brazil", "africa", "au", "in", "ca"
-        ]
-        if isinstance(scr, dict):
-            fields = [
-                scr.get('id', ''), scr.get('title', ''),
-                scr.get('description', ''), scr.get('canonicalName', '')
-            ]
-            for f in fields:
-                if any(k in f.lower() for k in EXCLUDE_KEYWORDS + REGION_KEYWORDS):
-                    return False
-            qtype = scr.get('criteriaMeta', {}).get('quoteType', '').lower()
-            if qtype != "equity":
-                return False
-            for crit in scr.get('criteriaMeta', {}).get('criteria', []):
-                if crit['field'] == 'exchange':
-                    values = crit.get('dependentValues', [])
-                    if not any(x in values for x in ['NMS', 'NYQ']):
-                        return False
-            return True
-        else:
-            return not any(k in scr.lower() for k in EXCLUDE_KEYWORDS + REGION_KEYWORDS)
+    async def get_tickers_from_screeners_async(self, screener_ids: List[str]) -> Tuple[List[str], List[str]]:
+        """
+        Fetch tickers from multiple Yahoo screeners concurrently.
+        Returns a tuple:
+            - List of unique tickers
+            - List of unique screeners (that successfully returned tickers)
+        """
+        logger.info(f"[ScreenerFetcher] Starting to fetch tickers for screeners: {screener_ids}")
 
-    async def get_available_dropdown_values_async(self):
-        def fetch_screeners():
-            s = yq.Screener()
-            try:
-                screeners = s.available_screeners
-            except Exception as e:
-                print(f"Error fetching available_screeners: {e}")
+        async def fetch(screener_id: str) -> List[str]:
+            async with self._semaphore:
+                for attempt in range(1, self.retry_attempts + 1):
+                    try:
+                        logger.info(f"[ScreenerFetcher] Fetching screener '{screener_id}' (Attempt {attempt})")
+                        screener = Screener()
+                        results = await asyncio.to_thread(screener.get_screeners, [screener_id])
+
+                        if not results:
+                            raise ValueError("Empty response from Yahoo Screener API")
+
+                        key = next(iter(results))
+                        quotes = results.get(key, {}).get("quotes", [])
+
+                        tickers = [q["symbol"] for q in quotes if "symbol" in q]
+                        return tickers
+
+                    except Exception as e:
+                        logger.warning(f"[ScreenerFetcher] Attempt {attempt} failed for '{screener_id}': {e}")
+                        await asyncio.sleep(self.retry_delay)
+
+                logger.info(f"[ScreenerFetcher] All attempts failed for screener '{screener_id}'")
                 return []
-            if hasattr(screeners, "get"):
-                return screeners.get("data", [])
-            else:
-                return screeners
 
-        screener_list = await asyncio.to_thread(fetch_screeners)
+        all_results = await asyncio.gather(*(fetch(sid) for sid in screener_ids))
 
-        filtered_screeners = []
-        if screener_list and isinstance(screener_list[0], dict):
-            for scr in screener_list:
-                if self.is_relevant_screener(scr):
-                    filtered_screeners.append(scr.get('title', scr.get('id')))
-        else:
-            for scr in screener_list:
-                if self.is_relevant_screener(scr):
-                    filtered_screeners.append(scr)
-        return filtered_screeners
-    
-    def get_tickers_for_screener_sync(self, screener_id_or_title):
-        s = yq.Screener()
-        try:
-            results = s.get_screeners([screener_id_or_title])
-        except Exception as e:
-            print(f"Error fetching screener '{screener_id_or_title}': {e}")
-            return []
-        tickers = []
-        try:
-            key = next(iter(results))
-            data = results[key]
-            for item in data['quotes']:
-                if 'symbol' in item:
-                    tickers.append(item['symbol'])
-        except Exception as e:
-            print(f"Error parsing tickers: {e}")
-        return tickers
+        ticker_screener = [
+            (screener_id, ticker)
+            for screener_id, tickers in zip(screener_ids, all_results)
+            for ticker in tickers
+        ]
 
-    async def get_tickers_for_screener_async(self, screener_id_or_title):
-        return await asyncio.to_thread(self.get_tickers_for_screener_sync, screener_id_or_title)
+        unique_tickers = sorted(set(ticker for _, ticker in ticker_screener))
+        used_screeners = sorted(set(screener for screener, _ in ticker_screener))
+
+        logger.info(
+            f"[ScreenerFetcher] Collected {len(unique_tickers)} unique tickers from {len(used_screeners)} screeners"
+        )
+
+        return unique_tickers, used_screeners, ticker_screener
 
  
-    
-    async def filter_tickers_by_market_cap_async(
-            self, tickers, min_market_cap=1e9
-    ):
-        if not tickers:
+    async def filter_tickers_by_market_cap_async(self, ticker_screener_pairs: list[tuple[str, str]], min_market_cap=1e9) -> list[str]:
+        if not ticker_screener_pairs:
             return []
-        filtered = []
-        for i in range(0, len(tickers), 50):
-            batch = tickers[i:i+50]
-            def fetch_summary_detail():
-                q = yq.Ticker(batch)
+
+        tickers = list({t for _, t in ticker_screener_pairs})  
+
+        def fetch_market_caps(tickers_batch):
+            try:
+                q = yq.Ticker(tickers_batch)
+                logger.info(f"[YF BATCH] summary keys: {list(q.summary_detail.keys())}")
                 return q.summary_detail
-            data = await asyncio.to_thread(fetch_summary_detail)
-            for symbol in batch:
-                cap = None
-                try:
-                    cap = data[symbol]['marketCap']
-                except Exception:
-                    continue
-                if cap is None:
-                    continue
-                if cap >= min_market_cap:
-                    filtered.append(symbol)
+            except Exception as e:
+                logger.warning(f"[MarketCap] Failed to fetch market caps: {e}")
+                return {}
+
+        summary_data = await asyncio.to_thread(fetch_market_caps, tickers)
+
+        filtered = []
+        for ticker in tickers:
+            try:
+                info = summary_data.get(ticker) or {}
+                cap = info.get('marketCap')
+                logger.info(f"[{ticker}] marketCap={cap}")
+                if cap is not None and cap >= min_market_cap:
+                    filtered.append(ticker)
+            except Exception as e:
+                logger.debug(f"[MarketCap] Skipping {ticker}: {e}")
+                continue
+
         return filtered
 
 
