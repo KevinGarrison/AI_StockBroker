@@ -109,8 +109,8 @@ function StockAnalysis() {
         </p>
       </div>
 
-      {/* News-Carousel */}
-      <NewsCarousel news={news} loading={loadingNews} />
+      {/* News-Carousel
+      <NewsCarousel news={news} loading={loadingNews} /> */}
 
       {/* Charts & Recommendation */}
       {loadingAnalysis ? (
@@ -127,6 +127,9 @@ function StockAnalysis() {
           </div>
         </>
       )}
+
+      {/* News-Carousel */}
+      <NewsCarousel news={news} loading={loadingNews} />
     </div>
   );
 }

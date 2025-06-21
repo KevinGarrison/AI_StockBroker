@@ -44,7 +44,7 @@ function LandingPage() {
         setCompanyList(parsed);
 
         // ✅ DEBUG: Anzahl und Beispielticker loggen
-        console.log("✅ companyList geladen:", parsed.length, "Unternehmen");
+        console.log("✅ companyList loaded:", parsed.length, "company");
         console.log(
           "🔍 Beispiel-Ticker aus companyList:",
           parsed.slice(0, 20).map((c) => c.ticker)
@@ -54,7 +54,7 @@ function LandingPage() {
         const check = ["TGT", "DG", "BJ", "TBBB"];
         check.forEach((ticker) => {
           const found = parsed.find((c) => c.ticker === ticker);
-          if (!found) console.warn(`❌ ${ticker} fehlt in companyList`);
+          if (!found) console.warn(`${ticker} is missing in companyList`);
         });
 
         console.log(

@@ -18,7 +18,10 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
   ];
 
   const simplify = (str) =>
-    str.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    str
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "");
 
   useEffect(() => {
     fetch("/api/first-filter-dropdown")
@@ -132,6 +135,16 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
             />
           ))}
         </datalist>
+
+        {isFiltering && (
+          <div
+            className="mb-3 d-flex justify-content-center align-items-center gap-2"
+            style={{ marginTop: "1.5rem" }}
+          >
+            <div className="spinner-border text-primary" role="status" />
+            <span className="text-muted">Loading filtered companies…</span>
+          </div>
+        )}
       </div>
 
       {/* Toggle Filter Button */}
@@ -164,7 +177,9 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
 
               {/* Market Cap */}
               <div className="col-12 col-md-6 text-start">
-                <label className="form-label fw-semibold">Market Cap (min)</label>
+                <label className="form-label fw-semibold">
+                  Market Cap (min)
+                </label>
                 <div className="d-flex flex-column flex-md-row align-items-stretch gap-2">
                   <input
                     type="number"
@@ -177,20 +192,31 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
                   <div style={{ minWidth: "180px" }}>
                     <Select
                       options={capUnitOptions}
-                      value={capUnitOptions.find((opt) => opt.value === capUnit)}
+                      value={capUnitOptions.find(
+                        (opt) => opt.value === capUnit
+                      )}
                       onChange={(selected) => setCapUnit(selected.value)}
                       isDisabled={!selectedFilter || isFiltering}
                       isSearchable={false}
-                      styles={{ control: (base) => ({ ...base, height: "100%" }) }}
+                      styles={{
+                        control: (base) => ({ ...base, height: "100%" }),
+                      }}
                     />
                   </div>
                 </div>
                 <div className="text-muted mt-1">
-                  Current: <strong>{marketCap || "–"} { {
-                    M: "Million",
-                    B: "Billion",
-                    T: "Trillion"
-                  }[capUnit]} USD</strong>
+                  Current:{" "}
+                  <strong>
+                    {marketCap || "–"}{" "}
+                    {
+                      {
+                        M: "Million",
+                        B: "Billion",
+                        T: "Trillion",
+                      }[capUnit]
+                    }{" "}
+                    USD
+                  </strong>
                 </div>
               </div>
             </div>
@@ -222,11 +248,14 @@ function SearchBarFilters({ searchTerm, setSearchTerm, companyList }) {
           )}
           {marketCap && (
             <span className="badge bg-primary">
-              Market Cap ≥ {marketCap} { {
-                M: "Million",
-                B: "Billion",
-                T: "Trillion"
-              }[capUnit] }
+              Market Cap ≥ {marketCap}{" "}
+              {
+                {
+                  M: "Million",
+                  B: "Billion",
+                  T: "Trillion",
+                }[capUnit]
+              }
               <FaTimes
                 className="ms-2"
                 style={{ cursor: "pointer" }}
