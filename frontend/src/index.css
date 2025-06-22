@@ -5,6 +5,8 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #f0f2f5 !important;
+  min-height: 100vh;
 }
 
 code {
@@ -51,7 +53,46 @@ code {
   transition: all 0.1s ease-in-out;
 }
 
+.rs-capunit__control {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.rs-capunit__control--is-disabled {
+  background-color: #f8f9fa !important;
+  cursor: not-allowed;
+  border-color: #ced4da;
+}
+
+.rs-capunit__single-value {
+  color: #212529;
+}
+
+.rs-capunit__single-value--is-disabled {
+  color: #6c757d !important;
+}
+
+.rs-capunit__indicator {
+  cursor: default;
+}
+
+.rs-capunit__indicator-separator {
+  display: none;
+}
+
+
+/* Stock Analysis Page Buttons */
+.btn-hover-scale {
+  transition: transform 0.2s ease;
+}
+
+.btn-hover-scale:hover {
+  transform: scale(1.03);
+}
+
+
 
 /*--------------------*/
 /*CompanyDetails*/
 /*--------------------*/
+
+

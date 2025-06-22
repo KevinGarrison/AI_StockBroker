@@ -49,7 +49,10 @@ function NewsCarousel({ news, loading, interval = 8000 }) {
           }
         `}
       </style>
-      <div className="card bg-white rounded shadow p-4 hover-box mb-4">
+      <div
+        className="card bg-white rounded shadow p-4 hover-box mb-4"
+        style={{ minHeight: "150px" }}
+      >
         <div
           style={{
             minHeight: "120",
@@ -65,7 +68,6 @@ function NewsCarousel({ news, loading, interval = 8000 }) {
             alignItems: "center",
           }}
         >
-          <span style={{ fontSize: 20, marginRight: 8 }}>📰</span>
           Company News
         </div>
         <div className="d-flex align-items-center fade-in-right w-100">
@@ -83,7 +85,13 @@ function NewsCarousel({ news, loading, interval = 8000 }) {
               target="_blank"
               rel="noopener noreferrer"
               className="fw-bold h6 mb-1 text-decoration-none"
-              style={{ color: "#1565c0" }}
+              style={{
+                color: "#1565c0",
+                display: "block",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
             >
               {currentNews.title}
             </a>
@@ -99,8 +107,8 @@ function NewsCarousel({ news, loading, interval = 8000 }) {
                 WebkitBoxOrient: "vertical",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
-                minHeight: "2.6em", 
-                lineHeight: "1.3em", 
+                minHeight: "2.6em",
+                lineHeight: "1.3em",
                 maxHeight: "2.6em",
               }}
             >

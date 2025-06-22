@@ -1,7 +1,6 @@
 import { useState } from "react";
 import SecFileModal from "./SecFileModal";
 
-// Helper: gibt Farben nach Recommendation zurück
 function badgeColor(rec) {
   if (rec.toUpperCase().includes("BUY")) return "success";
   if (rec.toUpperCase().includes("SELL")) return "danger";
@@ -11,7 +10,9 @@ function badgeColor(rec) {
 
 function RecommendationBox({ analysis }) {
   const [showModal, setShowModal] = useState(false);
-  
+  const [modalData, setModalData] = useState([]);
+  const [isLoadingModalData, setIsLoadingModalData] = useState(false);
+
   if (!analysis) return null;
 
   const {
@@ -20,26 +21,104 @@ function RecommendationBox({ analysis }) {
     sentiment,
     recommendation,
     justification,
-    meta,
+    risks,
   } = analysis;
 
+  // Fetch SEC reference docs when modal opens
+  const handleOpenModal = () => {
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    document.body.style.paddingRight = `${scrollbarWidth}px`;
+    setShowModal(true);
+
+    setIsLoadingModalData(true);
+    setModalData([]);
+
+    fetch("/api/reference-docs")
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("Fetched reference docs:", data);
+        const flat = Object.values(data).flat();
+
+        // remove sec file duplicates based on accession + filename
+        const uniqueDocs = [];
+        const seen = new Set();
+
+        for (const doc of flat) {
+          const key = `${doc.accession}_${doc.filename}`; // unique id
+          if (!seen.has(key)) {
+            seen.add(key);
+            uniqueDocs.push(doc);
+          }
+        }
+
+        setModalData(uniqueDocs);
+      })
+      .catch((err) => {
+        console.error("Failed to load reference docs:", err);
+        setModalData([]);
+      })
+      .finally(() => {
+        setIsLoadingModalData(false);
+      });
+  };
+
+  const handleCloseModal = () => {
+    document.body.style.overflow = "auto";
+    document.body.style.paddingRight = "0px";
+    setShowModal(false);
+  };
+
+  const handleDownload = () => {
+    const params = new URLSearchParams(window.location.search);
+    const ticker = params.get("company");
+
+    if (!ticker) {
+      alert("No ticker provided.");
+      return;
+    }
+
+    fetch(`/api/download-broker-pdf/${ticker}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to download PDF");
+        return res.blob();
+      })
+      .then((blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `AI_Analysis_${ticker}.pdf`; // dynamischer Dateiname
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch((err) => {
+        console.error("Download error:", err);
+        alert("Download failed.");
+      });
+  };
+
   return (
-    <div className="bg-white rounded shadow p-4 hover-box mb-4">
+    <div
+      className={`bg-white rounded shadow p-4 mb-4 ${
+        showModal ? "hover-box-active" : "hover-box"
+      }`}
+    >
       {/* Header */}
       <div className="d-flex align-items-center mb-3" style={{ gap: 10 }}>
-        <span style={{ fontSize: 24, color: "#FFD600" }}>🤖</span>
         <h4 className="fw-bold text-primary mb-0">
           AI Analysis Recommendation
         </h4>
       </div>
+
+      {/* Analysis Sections */}
       <div className="row g-3">
         {/* Technical */}
         <div className="col-md-4">
           <div className="p-3 rounded bg-light border h-100">
-            <div className="fw-bold mb-2" style={{ color: "#1e88e5" }}>
-              <span role="img" aria-label="tech" style={{ marginRight: 6 }}>
-                📈
-              </span>
+            <div className="fw-bold text-primary mb-2">
               Technical
             </div>
             <ul className="mb-0 small">
@@ -47,17 +126,11 @@ function RecommendationBox({ analysis }) {
             </ul>
           </div>
         </div>
+
         {/* Fundamental */}
         <div className="col-md-4">
           <div className="p-3 rounded bg-light border h-100">
-            <div className="fw-bold mb-2" style={{ color: "#43a047" }}>
-              <span
-                role="img"
-                aria-label="fundamental"
-                style={{ marginRight: 6 }}
-              >
-                💹
-              </span>
+            <div className="fw-bold text-primary mb-2">
               Fundamental
             </div>
             <ul className="mb-0 small">
@@ -66,17 +139,11 @@ function RecommendationBox({ analysis }) {
             </ul>
           </div>
         </div>
+
         {/* Sentiment */}
         <div className="col-md-4">
           <div className="p-3 rounded bg-light border h-100">
-            <div className="fw-bold mb-2" style={{ color: "#ff9800" }}>
-              <span
-                role="img"
-                aria-label="sentiment"
-                style={{ marginRight: 6 }}
-              >
-                💬
-              </span>
+            <div className="fw-bold text-primary mb-2">
               Sentiment
             </div>
             <ul className="mb-0 small">
@@ -85,9 +152,10 @@ function RecommendationBox({ analysis }) {
           </div>
         </div>
       </div>
+
       {/* Recommendation */}
       {recommendation && (
-        <div className="d-flex align-items-center mt-4 mb-1">
+        <div className="d-flex align-items-center mt-4 mb-3">
           <span
             className={`badge rounded-pill px-3 py-2 me-3 bg-${badgeColor(
               recommendation
@@ -101,53 +169,40 @@ function RecommendationBox({ analysis }) {
           </span>
         </div>
       )}
-      {/* Meta */}
-      <div className="mt-4 p-3 small bg-light border rounded position-relative">
-        <div className="fw-bold mb-1 text-primary d-flex justify-content-between align-items-center">
-          Meta Data SEC Files
-          <button
-            className="btn btn-sm btn-outline-primary"
-            style={{ fontSize: 13 }}
-            onClick={() => setShowModal(true)}
-          >
-            Open Meta Data
-          </button>
+
+      {/* Risks */}
+      {risks && (
+        <div className="alert alert-warning mt-3">
+          <b>Risks:</b> {risks}
         </div>
-        <div>
-          {meta.form && (
-            <>
-              <b>Form:</b> {meta.form} <br />
-            </>
-          )}
-          {meta.reportDate && (
-            <>
-              <b>Report Date:</b> {meta.reportDate} <br />
-            </>
-          )}
-          {meta.accessionNumber && (
-            <>
-              <b>Accession Number:</b> {meta.accessionNumber} <br />
-            </>
-          )}
-          {meta.cik && (
-            <>
-              <b>CIK:</b> {meta.cik}
-            </>
-          )}
-          {!meta.form &&
-            !meta.reportDate &&
-            !meta.accessionNumber &&
-            !meta.cik && (
-              <span className="text-muted">No meta data found.</span>
-            )}
-        </div>
-        {/* Das Modal */}
-        <SecFileModal
-          meta={meta}
-          show={showModal}
-          onClose={() => setShowModal(false)}
-        />
+      )}
+
+      {/* Buttons */}
+      <div className="d-flex justify-content-end flex-wrap gap-2 mt-4">
+        <button
+          className="btn btn-outline-primary d-flex align-items-center gap-2 btn-hover-scale"
+          onClick={handleOpenModal}
+        >
+          <i className="fas fa-folder-open"></i>
+          View SEC Files
+        </button>
+
+        <button
+          className="btn btn-primary d-flex align-items-center gap-2 btn-hover-scale"
+          onClick={handleDownload}
+        >
+          <i className="fas fa-download"></i>
+          Download AI Analysis
+        </button>
       </div>
+
+      {/* Modal with dynamic reference data */}
+      <SecFileModal
+        data={modalData}
+        loading={isLoadingModalData}
+        show={showModal}
+        onClose={handleCloseModal}
+      />
     </div>
   );
 }

@@ -37,6 +37,7 @@
   }
 }
 
+
 .search-input {
   padding: 1rem 1.5rem;
   font-size: 1.1rem;
@@ -76,7 +77,8 @@
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.hover-box:hover {
+.hover-box:hover,
+.hover-box-active {
   transform: translateY(-5px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
 }
