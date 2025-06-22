@@ -3,7 +3,8 @@ import NewsCarousel from "../components/stockAnalysisPage/NewsCarousel";
 import ParseBrokerAnalysis from "../utils/ParseBrokerAnalysis";
 import RecommendationBox from "../components/stockAnalysisPage/RecommendationBox";
 import AnalysisLoadingScreen from "../components/stockAnalysisPage/AnalysisLoadingScreen";
-import AnalysisChart from "../components/stockAnalysisPage/AnalysisChart";
+// import AnalysisChart from "../components/stockAnalysisPage/AnalysisChart";
+import AnalysisChartGrafana from "../components/stockAnalysisPage/AnalysisChartGrafana";
 
 function StockAnalysis() {
   const [news, setNews] = useState([]);
@@ -119,7 +120,7 @@ function StockAnalysis() {
         <>
           {/* Charts & Simulation Placeholder */}
           <div className="mb-4">
-            {forecastData && <AnalysisChart data={forecastData} />}
+            {ticker && <AnalysisChartGrafana ticker={ticker} />}
           </div>
           {/* Recommendation */}
           <div className="mt-4">
