@@ -1,20 +1,16 @@
 import { useEffect, useState } from "react";
 import CompanyFacts from "../components/companyDetailsPage/CompanyFacts";
-import CompanyChart from "../components/companyDetailsPage/CompanyChart";
+import CompanyChartGrafana from "../components/companyDetailsPage/CompanyChartGrafana";
+
 
 function CompanyDetails() {
-  const [history, setHistory] = useState(null);
+  // const [history, setHistory] = useState(null);
   const [facts, setFacts] = useState(null);
   const params = new URLSearchParams(window.location.search);
   const ticker = params.get("company");
 
   useEffect(() => {
     if (!ticker) return;
-
-    fetch(`/api/stock-history/${ticker}`)
-      .then((res) => res.json())
-      .then(setHistory)
-      .catch((err) => console.error("Fehler beim Laden:", err));
 
     fetch(`/api/company-facts/${ticker}`)
       .then((res) => res.json())
@@ -48,7 +44,7 @@ function CompanyDetails() {
 
       {/* Facts and Chart */}
       {facts && <CompanyFacts facts={facts} />}
-      {history && <CompanyChart history={history} />}
+      {ticker && <CompanyChartGrafana ticker={ticker} />}
 
       {/* AI Button */}
       <div className="text-center mt-5">
