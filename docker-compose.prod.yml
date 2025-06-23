@@ -1,0 +1,193 @@
+services:
+##########
+#DATABASES
+##########
+  influxdb:
+    image: influxdb:latest
+    container_name: influxdb
+    environment:
+      - CONTAINER_NAME=influxdb
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${DOCKER_INFLUXDB_INIT_USERNAME}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${DOCKER_INFLUXDB_INIT_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${DOCKER_INFLUXDB_INIT_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${DOCKER_INFLUXDB_INIT_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${DOCKER_INFLUXDB_INIT_ADMIN_TOKEN}
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+    restart: always
+
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    environment:
+      - CONTAINER_NAME=qdrant
+    ports:
+      - "6333:6333"    # REST API
+      - "6334:6334"    # gRPC
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: always
+
+
+  redis:
+    image: redis
+    container_name: redis
+    environment:
+      - CONTAINER_NAME=redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: always
+
+###########
+#DASHBOARDS
+###########
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - CONTAINER_NAME=grafana
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana.ini:/etc/grafana/grafana.ini
+    depends_on:
+      - influxdb
+    restart: always
+
+######################
+#MICROSERVICES BACKEND
+######################
+  api-gateway:
+    image: kevingarrison19121990/cdc_api_gateway:latest
+    container_name: api-gateway
+    environment:
+      - CONTAINER_NAME=api-gateway
+    expose:
+      - "8000"
+    depends_on:
+      - influxdb
+      - qdrant
+      - redis
+      - api-fetcher
+      - rag-chatbot
+      - forecasting
+    restart: always
+
+
+  api-fetcher:
+    image: kevingarrison19121990/cdc_api_fetcher:latest
+    container_name: api-fetcher
+    environment:
+      - CONTAINER_NAME=api-fetcher
+    expose:
+      - "8001"      
+    restart: always
+  
+
+  rag-chatbot:
+    image: kevingarrison19121990/cdc_rag_chatbot:latest
+    container_name: rag-chatbot
+    environment:
+      - CONTAINER_NAME=rag-chatbot
+    expose:
+      - "8002"
+    depends_on:
+      - qdrant
+      - redis
+    restart: always
+
+
+  forecasting:
+    image: kevingarrison19121990/cdc_forecasting:latest
+    container_name: forecasting
+    environment:
+      - CONTAINER_NAME=forecasting
+    expose:
+      - "8003"
+    depends_on:
+      - influxdb
+      - qdrant
+      - redis
+    restart: always
+
+  influx-client:
+    image: kevingarrison19121990/cdc_influx_client:latest
+    container_name: influx-client
+    environment:
+      - CONTAINER_NAME=influx-client
+      - INFLUXDB_URL=http://influxdb:8086/
+      - INFLUXDB_TOKEN=${DOCKER_INFLUXDB_INIT_ADMIN_TOKEN}
+      - INFLUXDB_ORG=${DOCKER_INFLUXDB_INIT_ORG}
+      - INFLUXDB_BUCKET=${DOCKER_INFLUXDB_INIT_BUCKET}
+      - PYTHONPATH=/app
+    expose:
+      - "8004"
+    depends_on:
+      - influxdb
+    restart: always
+
+########################
+#MICROSERVICES FRONTEND
+########################
+
+  frontend:
+    image: kevingarrison19121990/cdc_frontend:latest
+    container_name: frontend
+    environment:
+      - CONTAINER_NAME=frontend
+    expose:
+     - "4000"
+    depends_on:
+      - api-gateway
+    restart: always
+
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    environment:
+      - CONTAINER_NAME=nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro 
+    depends_on:
+      - api-gateway
+      - frontend
+    restart: always
+
+#########################
+#LOGGING TRACING TRACKING
+#########################
+
+  fluent-bit:
+    image: fluent/fluent-bit:latest
+    container_name: fluent-bit
+    environment:
+      - CONTAINER_NAME=fluent-bit
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
+      - ./enrich_docker_log.lua:/fluent-bit/etc/enrich_docker_log.lua:ro
+    depends_on:
+      - influxdb
+    restart: always
+
+##################
+#VOLUMES & MOUNTS
+##################
+volumes:
+  influxdb-data:
+  grafana-data:
+  qdrant-data:
+  redis-data:
