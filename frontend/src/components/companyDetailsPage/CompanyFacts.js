@@ -1,129 +1,97 @@
+import { useEffect, useState } from "react";
+
 function CompanyFacts({ facts }) {
+  const [tickerMap, setTickerMap] = useState({});
+
+  useEffect(() => {
+    fetch("/api/companies-df")
+      .then((res) => res.json())
+      .then((data) => {
+        const map = {};
+        data.forEach((item) => {
+          map[item.ticker] = item.title;
+        });
+        setTickerMap(map);
+      })
+      .catch((err) => {
+        console.error("Error fetching company titles:", err);
+      });
+  }, []);
+
+  const displayName = tickerMap[facts.ticker] || "Company Name";
+
   return (
     <div className="bg-white rounded shadow p-4 mb-5 hover-box">
       <h4 className="mb-4 text-secondary">Company Snapshot</h4>
       <div className="row">
         {/* Left column */}
         <div className="col-md-6">
-          {/* Name */}
-          <div className="d-flex mb-2">
-            <div className="me-2" style={{ minWidth: "20px", color: "#1e88e5" }}>
-              <i className="fas fa-building"></i>
-            </div>
-            <div className="d-flex">
-              <div style={{ minWidth: "120px" }}>
-                <strong>Name:</strong>
-              </div>
-              <div>{facts.name}</div>
-            </div>
-          </div>
-
-          {/* Sector */}
-          <div className="d-flex mb-2">
-            <div className="me-2" style={{ minWidth: "20px", color: "#1e88e5" }}>
-              <i className="fas fa-layer-group"></i>
-            </div>
-            <div className="d-flex">
-              <div style={{ minWidth: "120px" }}>
-                <strong>Sector:</strong>
-              </div>
-              <div>{facts.sector}</div>
-            </div>
-          </div>
-
-          {/* Industry */}
-          <div className="d-flex mb-2">
-            <div className="me-2" style={{ minWidth: "20px", color: "#1e88e5" }}>
-              <i className="fas fa-industry"></i>
-            </div>
-            <div className="d-flex">
-              <div style={{ minWidth: "120px" }}>
-                <strong>Industry:</strong>
-              </div>
-              <div>{facts.industry}</div>
-            </div>
-          </div>
-
-          {/* Current Price */}
-          <div className="d-flex mb-2">
-            <div className="me-2" style={{ minWidth: "20px", color: "#1e88e5" }}>
-              <i className="fas fa-dollar-sign"></i>
-            </div>
-            <div className="d-flex">
-              <div style={{ minWidth: "120px" }}>
-                <strong>Current Price:</strong>
-              </div>
-              <div>${facts.current_price.toFixed(2)}</div>
-            </div>
-          </div>
-
-          {/* Market Cap */}
-          <div className="d-flex mb-2">
-            <div className="me-2" style={{ minWidth: "20px", color: "#1e88e5" }}>
-              <i className="fas fa-chart-line"></i>
-            </div>
-            <div className="d-flex">
-              <div style={{ minWidth: "120px" }}>
-                <strong>Market Cap:</strong>
-              </div>
-              <div>${Math.round(facts.market_cap / 1e9)}B</div>
-            </div>
-          </div>
+          <FactRow icon="fa-building" label="Name" value={displayName} />
+          <FactRow icon="fa-layer-group" label="Sector" value={facts.sector} />
+          <FactRow icon="fa-industry" label="Industry" value={facts.industry} />
+          <FactRow
+            icon="fa-users"
+            label="Employees"
+            value={facts.employees?.toLocaleString() || "N/A"}
+          />
+          <FactRow
+            icon="fa-chart-bar"
+            label="Revenue Growth"
+            value={`${(facts.revenue_growth * 100).toFixed(1)}%`}
+          />
         </div>
 
         {/* Right column */}
         <div className="col-md-6">
-          {/* EPS */}
-          <div className="d-flex mb-2">
-            <div className="me-2" style={{ minWidth: "20px", color: "#1e88e5" }}>
-              <i className="fas fa-coins"></i>
-            </div>
-            <div className="d-flex">
-              <div style={{ minWidth: "120px" }}>
-                <strong>EPS:</strong>
-              </div>
-              <div>{facts.eps_trailing}</div>
-            </div>
-          </div>
+          <FactRow
+            icon="fa-dollar-sign"
+            label="Current Price"
+            value={`$${facts.current_price.toFixed(2)}`}
+          />
+          <FactRow
+            icon="fa-chart-line"
+            label="Market Cap"
+            value={`$${Math.round(facts.market_cap / 1e9)}B`}
+          />
+          <FactRow
+            icon="fa-balance-scale"
+            label="Forward P/E"
+            value={facts.forward_pe.toFixed(2)}
+          />
+          <FactRow
+            icon="fa-percentage"
+            label="Dividend Yield"
+            value={`${(facts.dividend_yield * 100).toFixed(2)}%`}
+          />
+          <FactRow
+            icon="fa-globe"
+            label="Website"
+            value={
+              <a href={facts.website} target="_blank" rel="noopener noreferrer">
+                {facts.website}
+              </a>
+            }
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
-          {/* Revenue */}
-          <div className="d-flex mb-2">
-            <div className="me-2" style={{ minWidth: "20px", color: "#1e88e5" }}>
-              <i className="fas fa-cash-register"></i>
-            </div>
-            <div className="d-flex">
-              <div style={{ minWidth: "120px" }}>
-                <strong>Revenue:</strong>
-              </div>
-              <div>${Math.round(facts.revenue / 1e9)}B</div>
-            </div>
-          </div>
+// Reusable FactRow component
+function FactRow({ icon, label, value }) {
+  return (
+    <div className="d-flex align-items-center mb-2">
+      {/* Icon */}
+      <div className="me-2" style={{ width: "20px", color: "#1e88e5" }}>
+        <i className={`fas ${icon}`}></i>
+      </div>
 
-          {/* Net Income */}
-          <div className="d-flex mb-2">
-            <div className="me-2" style={{ minWidth: "20px", color: "#1e88e5" }}>
-              <i className="fas fa-wallet"></i>
-            </div>
-            <div className="d-flex">
-              <div style={{ minWidth: "120px" }}>
-                <strong>Net Income:</strong>
-              </div>
-              <div>${Math.round(facts.net_income / 1e9)}B</div>
-            </div>
-          </div>
-
-          {/* Dividend Yield */}
-          <div className="d-flex mb-2">
-            <div className="me-2" style={{ minWidth: "20px", color: "#1e88e5" }}>
-              <i className="fas fa-percentage"></i>
-            </div>
-            <div className="d-flex">
-              <div style={{ minWidth: "120px" }}>
-                <strong>Dividend Yield:</strong>
-              </div>
-              <div>{facts.dividend_yield}%</div>
-            </div>
-          </div>
+      {/* Label + Value container */}
+      <div className="d-flex justify-content-start w-100">
+        <div style={{ width: "130px", fontWeight: "bold" }}>{label}:</div>
+        <div className="flex-grow-1 text-wrap" style={{ marginLeft: "8px" }}>
+          {value}
         </div>
       </div>
     </div>
