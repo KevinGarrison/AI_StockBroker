@@ -88,6 +88,7 @@ services:
     container_name: api-fetcher
     environment:
       - CONTAINER_NAME=api-fetcher
+      - USER_AGENT_SEC=${USER_AGENT_SEC}
     expose:
       - "8001"      
     restart: always
@@ -98,6 +99,16 @@ services:
     container_name: rag-chatbot
     environment:
       - CONTAINER_NAME=rag-chatbot
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - QDRANT_HOST=${QDRANT_HOST} 
+      - QDRANT_PORT=${QDRANT_PORT}
+      - COLLECTION_NAME=${COLLECTION_NAME}
+      - REDIS_HOST=${REDIS_HOST}
+      - VECTOR_SIZE=1536
+      - CHUNK_SIZE =3500                 
+      - OVERLAP_SIZE=200
+      - EMBEDDING_MODEL_OPENAI="text-embedding-3-small"
     expose:
       - "8002"
     depends_on:
