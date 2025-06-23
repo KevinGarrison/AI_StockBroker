@@ -175,9 +175,16 @@ async def stock_broker_analysis(ticker: str):
                 if history_data:
                     last_history_point = history_data[-1]
                     forecast_data.insert(0, last_history_point)
+                def round_forecast_data(data):
+                    return [
+                        {
+                            "ds": item["ds"],
+                            "y": round(item["y"], 2)
+                        } for item in data if "ds" in item and "y" in item
+                    ]
                 company_json['forecast'] = {
-                    "forecast": forecast_json.get("forecast", []),  
-                    "history": forecast_json.get("history", [])     
+                    "forecast": round_forecast_data(forecast_json.get("forecast", [])),  
+                    "history": round_forecast_data(forecast_json.get("history", []))     
                 }
                 logger.info(f"[AI Result 2]: Forecast [{forecast_data}]")
 

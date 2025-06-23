@@ -7,12 +7,16 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 from bs4 import XMLParsedAsHTMLWarning
 from qdrant_client import QdrantClient
+import matplotlib.ticker as mticker
 from dataclasses import dataclass
 from fastapi import HTTPException
+import matplotlib.pyplot as plt
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
+from datetime import datetime
 from typing import List
 from uuid import uuid4
+from io import BytesIO
 from fpdf import FPDF
 import pandas as pd
 import tempfile
@@ -305,17 +309,83 @@ class RAG_Chatbot:
 
     def generate_broker_analysis_pdf(self, data: dict, ticker: str) -> str:
         logo_path = None
+        forecast_chart_path = None
+
         try:
-            response = requests.get(
-                f"http://api-gateway:8000/get-logo/{ticker}", timeout=20
-            )
+            response = requests.get(f"http://api-gateway:8000/get-logo/{ticker}", timeout=20)
             if response.status_code == 200:
                 tmp_logo = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
                 tmp_logo.write(response.content)
                 tmp_logo.close()
                 logo_path = tmp_logo.name
+
+            response_hst = requests.get(f"http://influx-client:8004/history/{ticker}", timeout=None)
+            logger.info('[RAG CHATBOT] requesting history from influx')
+            history = response_hst.json()
+
+            response_fc = requests.get(f"http://influx-client:8004/forecast/{ticker}", timeout=None)
+            logger.info('[RAG CHATBOT] requesting forecast from influx')
+            forecast = response_fc.json()
+
+            if not history or not forecast:
+                raise ValueError("Missing time series data for chart generation.")
+
+
+            history_last_12 = history[-12:] if len(history) >= 12 else history
+            history_data = [{"ds": item["ds"], "value": item["y"]} for item in history_last_12]
+            forecast_data = [{"ds": item["ds"], "value": item["y"]} for item in forecast]
+
+            combined = history_data + forecast_data
+            combined.sort(key=lambda item: item["ds"])
+
+            x_hist = []
+            y_hist = []
+            x_forecast = []
+            y_forecast = []
+
+            for i, item in enumerate(combined):
+                try:
+                    dt = datetime.fromisoformat(item["ds"])
+                    if i < len(history_data):
+                        x_hist.append(dt)
+                        y_hist.append(item["value"])
+                    else:
+                        x_forecast.append(dt)
+                        y_forecast.append(item["value"])
+                except Exception as e:
+                    logger.warning(f"Skipping invalid timestamp '{item['ds']}': {e}")
+
+            fig, ax = plt.subplots(figsize=(5, 3))
+
+            ax.plot(x_hist, y_hist, marker='o', label="History")
+
+            ax.plot(x_forecast, y_forecast, marker='x', linestyle='--', label="Forecast", color='red', linewidth=2)
+
+            ax.set_title("Forecast Stock Trend")
+            ax.set_xlabel("Time")
+            ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f'{x:.2f}'))
+            ax.set_ylabel("Close Price")
+
+            ax.grid(False)
+
+            fig.autofmt_xdate()
+
+            ax.legend()
+
+            fig.tight_layout()
+
+            buf = BytesIO()
+            plt.savefig(buf, format='png')
+            plt.close()
+            buf.seek(0)
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_chart:
+                tmp_chart.write(buf.read())
+                forecast_chart_path = tmp_chart.name
+                logger.info(f"[RAG CHATBOT] Chart saved at: {forecast_chart_path}")
+
         except Exception as e:
-            print(f"Logo fetch failed for {ticker}: {e}")
+            logger.error(f"[PDF Generation] Chart/logo fetch or generation failed for {ticker}: {e}")
 
         class PDF(FPDF):
             def __init__(self):
@@ -326,14 +396,14 @@ class RAG_Chatbot:
                 self.set_y(10)
                 self.set_text_color(0, 0, 0)
                 self.set_font("Times", "B", 24)
-                self.cell(
-                    0,
-                    14,
-                    f"{data.get('company_name', 'Company')} - Broker Analysis",
-                    ln=True,
-                    align="C",
-                )
+                self.cell(0, 14, f"{data.get('company_name', 'Company')} - Broker Analysis", ln=True, align="C")
                 self.ln(5)
+            
+            def footer(self):
+                self.set_y(-15)
+                self.set_font("Times", "I", 9)
+                self.set_text_color(100)
+                self.cell(0, 10, f"Page {self.page_no()}", align="C")
 
             def chapter_title(self, title):
                 if not self.logo_inserted and logo_path and os.path.exists(logo_path):
@@ -352,7 +422,7 @@ class RAG_Chatbot:
             def chapter_body(self, text):
                 self.set_font("Times", "", 11)
                 self.set_text_color(50, 50, 50)
-                self.multi_cell(0, 6, text)
+                self.multi_cell(0, 6, text or "")  
                 self.ln(2)
 
         pdf = PDF()
@@ -360,11 +430,12 @@ class RAG_Chatbot:
         pdf.add_page()
 
         sections = {
-            "Technical Analysis": data.get("technical_analysis", ""),
-            "Fundamental Analysis": data.get("fundamental_analysis", ""),
-            "Sentiment Analysis": data.get("sentiment_analysis", ""),
-            "Risks (SEC Files)": data.get("risks_sec_files", ""),
-            "Final Recommendation": f"{data.get('final_recommendation', '')} - {data.get('justification', '')}",
+            "Forecast Chart": forecast_chart_path,
+            "Technical Analysis": (data.get("technical_analysis") or "").strip(),
+            "Fundamental Analysis": (data.get("fundamental_analysis") or "").strip(),
+            "Sentiment Analysis": (data.get("sentiment_analysis") or "").strip(),
+            "Risks (SEC Files)": (data.get("risks_sec_files") or "").strip(),
+            "Final Recommendation": f"{(data.get('final_recommendation') or '').strip()} - {(data.get('justification') or '').strip()}",
         }
 
         sec_meta = data.get("sec_metadata", [])
@@ -375,9 +446,21 @@ class RAG_Chatbot:
             )
             sections["SEC Metadata"] = meta_text
 
+        new_page_triggered = False
+
         for title, content in sections.items():
+            if title == "Sentiment Analysis" and not new_page_triggered:
+                pdf.add_page()
+                new_page_triggered = True
+
             pdf.chapter_title(title)
-            pdf.chapter_body(content)
+
+            if title == "Forecast Chart" and content and os.path.exists(content):
+                pdf.image(content, x=10, w=180)
+                pdf.ln(10)
+            else:
+                pdf.chapter_body(content or "")
+
 
         tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
         pdf.output(tmp_file.name)
@@ -385,6 +468,8 @@ class RAG_Chatbot:
 
         if logo_path and os.path.exists(logo_path):
             os.remove(logo_path)
+        if forecast_chart_path and os.path.exists(forecast_chart_path):
+            os.remove(forecast_chart_path)
 
         return tmp_file.name
 

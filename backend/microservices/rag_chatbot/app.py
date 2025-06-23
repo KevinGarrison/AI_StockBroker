@@ -1,5 +1,5 @@
-from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, BackgroundTasks
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.encoders import jsonable_encoder
 from contextlib import asynccontextmanager
 from rag_chatbot import RAG_Chatbot
@@ -155,7 +155,7 @@ def download_refdoc_endpoint():
 
 
 @app.get("/download-broker-pdf/{ticker}")
-def download_broker_pdf(ticker:str):
+def download_broker_pdf(ticker: str, background_tasks: BackgroundTasks):
     redis_client = redis_db["client"]
     json_str = redis_client.get("broker_analysis")
     if not json_str:
@@ -168,11 +168,13 @@ def download_broker_pdf(ticker:str):
 
     pdf_path = rag_bot.generate_broker_analysis_pdf(data=data, ticker=ticker)
 
+    background_tasks.add_task(os.remove, pdf_path)
+
     return FileResponse(
         path=pdf_path,
         filename="broker_analysis.pdf",
         media_type="application/pdf",
-        background=lambda: os.remove(pdf_path)
+        background=background_tasks
     )
 
     
