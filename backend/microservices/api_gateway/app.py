@@ -170,7 +170,11 @@ async def stock_broker_analysis(ticker: str):
             forecast = await client.get(f"http://forecasting:8003/forecast/{ticker}", timeout=None)
             if forecast.status_code == 200:
                 forecast_json = forecast.json()
+                history_data = forecast_json.get('history', [])
                 forecast_data = forecast_json.get('forecast', [])
+                if history_data:
+                    last_history_point = history_data[-1]
+                    forecast_data.insert(0, last_history_point)
                 company_json['forecast'] = {
                     "forecast": forecast_json.get("forecast", []),  
                     "history": forecast_json.get("history", [])     
