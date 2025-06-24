@@ -97,23 +97,18 @@ class API_Fetcher:
 
         include_patterns = re.compile(
             r"""^(
-                day_gainers(?!_)|
-                most_actives(?!_)|
-                top_stocks_.*|
-                most_(institutionally|shorted).*stocks|
-                analyst_.*stocks|
-                bullish_stocks_right_now|
-                bearish_stocks_right_now|
-                strong_undervalued_stocks|
-                growth_technology_stocks|
-                upside_breakout_stocks_daily|
-                morningstar_five_star_stocks|
-                latest_analyst_upgraded_stocks|
-                stocks_.*|
-                undervalued_.*stocks|
-                fifty_two_wk_(gainers|losers)$|
-                the_acquirers_multiple(_(asia|europe))?
-            )$""",
+            .*stocks.*|
+            .*gainers.*|
+            .*losers.*|
+            .*actives.*|
+            .*upgraded.*|
+            .*undervalued.*|
+            .*breakout.*|
+            most_.*|
+            top_.*|
+            day_.*|
+            analyst_.*
+        )$""",
             re.IGNORECASE | re.VERBOSE,
         )
 
