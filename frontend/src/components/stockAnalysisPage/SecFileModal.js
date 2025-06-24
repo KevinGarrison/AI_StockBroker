@@ -1,21 +1,44 @@
+import ReactDOM from "react-dom";
+
 function SecFileModal({ data, show, onClose, loading }) {
+  
   if (!show) return null;
 
-  // Öffnet ein Dokument in einem neuen Browser-Tab
+  // Opens the document in a new tab
   const openInNewTab = (html) => {
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");
   };
 
-  return (
+  return ReactDOM.createPortal(
     <div
-      className="modal fade show d-block"
+      className="modal show"
       tabIndex="-1"
-      style={{ background: "rgba(0,0,0,0.4)" }}
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: "rgba(0,0,0,0.4)",
+        overflowY: "auto",
+        zIndex: 1055,
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        padding: "1rem",
+      }}
     >
-      <div className="modal-dialog modal-dialog-centered modal-lg">
-        <div className="modal-content">
+      <div
+        className="modal-dialog modal-lg"
+        style={{
+          width: "100%",
+          maxWidth: "700px",
+          marginTop: "3rem",
+        }}
+      >
+        <div className="modal-content" style={{ overflow: "hidden" }}>
           <div className="modal-header">
             <h5 className="modal-title">SEC Files</h5>
             <button
@@ -26,26 +49,29 @@ function SecFileModal({ data, show, onClose, loading }) {
             ></button>
           </div>
 
-          <div className="modal-body">
-            {/* during loading */}
+          <div
+            className="modal-body"
+            style={{
+              maxHeight: "70vh",
+              overflowY: "auto",
+            }}
+          >
             {loading ? (
-              <div className="text-center text-muted">
-                Loading files...
-              </div>
-
-              // after laoding
+              <div className="text-center text-muted">Loading files...</div>
             ) : data && data.length > 0 ? (
               <ul className="list-group">
                 {data.map((doc, index) => (
                   <li
                     key={index}
-                    className="list-group-item d-flex justify-content-between align-items-center"
+                    className="list-group-item d-flex flex-column flex-md-row justify-content-between align-items-md-center"
                   >
-                    <div>
+                    <div className="flex-grow-1 text-break me-md-3">
                       <strong>{doc.form}</strong> – {doc.filename}
                     </div>
+
                     <button
-                      className="btn btn-sm btn-outline-primary"
+                      className="btn btn-sm btn-outline-primary mt-2 mt-md-0"
+                      style={{ minWidth: "120px" }}
                       onClick={() => openInNewTab(doc.raw_content)}
                     >
                       Open report
@@ -57,15 +83,10 @@ function SecFileModal({ data, show, onClose, loading }) {
               <p className="text-muted">No SEC files available.</p>
             )}
           </div>
-
-          {/* <div className="modal-footer">
-            <button className="btn btn-secondary" onClick={onClose}>
-              Close
-            </button>
-          </div> */}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
