@@ -4,6 +4,7 @@ import StockAnalysis from "./pages/StockAnalysis";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./App.css";
 
+
 function App() {
   const pathname = window.location.pathname;
 

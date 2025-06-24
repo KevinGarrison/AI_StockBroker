@@ -14,7 +14,7 @@ function LandingPage() {
         const sorted = json.sort((a, b) => a.title.localeCompare(b.title));
         setCompanyList(sorted);
         setLoading(false);
-        console.log("✅ companyList loaded:", sorted.length);
+        console.log("companyList loaded:", sorted.length);
       })
       .catch((err) => {
         console.error("API error:", err);

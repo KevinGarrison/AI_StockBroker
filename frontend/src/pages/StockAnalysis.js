@@ -3,15 +3,14 @@ import NewsCarousel from "../components/stockAnalysisPage/NewsCarousel";
 import ParseBrokerAnalysis from "../utils/ParseBrokerAnalysis";
 import RecommendationBox from "../components/stockAnalysisPage/RecommendationBox";
 import AnalysisLoadingScreen from "../components/stockAnalysisPage/AnalysisLoadingScreen";
-// import AnalysisChart from "../components/stockAnalysisPage/AnalysisChart";
 import AnalysisChartGrafana from "../components/stockAnalysisPage/AnalysisChartGrafana";
+import HomeButton from "../components/common/HomeButton";
 
 function StockAnalysis() {
   const [news, setNews] = useState([]);
   const [loadingNews, setLoadingNews] = useState(true);
   const [modernAnalysis, setModernAnalysis] = useState(null);
   const [loadingAnalysis, setLoadingAnalysis] = useState(true);
-  const [forecastData, setForecastData] = useState(null);
   const [facts, setFacts] = useState(null); //for heading
   const params = new URLSearchParams(window.location.search);
   const ticker = params.get("company");
@@ -38,21 +37,12 @@ function StockAnalysis() {
           if (!newsController.signal.aborted) setLoadingNews(false);
         });
 
-      // ---------- History & Forecast ----------
-
-      fetch(`/api/forecast/${ticker}`)
-        .then((res) => res.json())
-        .then((data) => {
-          setForecastData(data);
-        })
-        .catch((err) => console.error("Fehler beim Forecast:", err));
-
       // ---------- COMPANY DETAILS ---------
       // fetching facts to get company name for heading
       fetch(`/api/company-facts/${ticker}`)
         .then((res) => res.json())
         .then((data) => {
-          console.log("Company facts:", data); // 👈 DEBUG
+          console.log("Company facts:", data); 
           setFacts(data);
         })
         .catch((err) =>
@@ -69,11 +59,11 @@ function StockAnalysis() {
         .then((data) => {
           if (analysisController.signal.aborted) return;
 
-          console.log("[/stock-broker-analysis API Response]:", data); // 🔍 DEBUG
+          console.log("[/stock-broker-analysis API Response]:", data); 
 
           if (data) {
-            const analysis = ParseBrokerAnalysis(data); // ❗ Direkt data (nicht data.broker_analysis)
-            console.log("[Parsed Analysis]:", analysis); // 🔍 DEBUG
+            const analysis = ParseBrokerAnalysis(data); 
+            console.log("[Parsed Analysis]:", analysis); 
             setModernAnalysis(analysis);
           }
         })
@@ -84,7 +74,7 @@ function StockAnalysis() {
           if (!analysisController.signal.aborted) setLoadingAnalysis(false);
         });
 
-      // CLEAN-UP: Beide Fetches abbrechen, wenn Effect neu startet oder Komponente unmountet
+      // CLEAN-UP: Cancel both fetches when Effect restarts or unmounts component
       return () => {
         newsController.abort();
         analysisController.abort();
@@ -94,6 +84,7 @@ function StockAnalysis() {
 
   return (
     <div className="container my-5">
+      <HomeButton />
       {/* Header */}
       <div className="text-center mb-5">
         <h1 className="fw-bold display-5 text-primary">Analysis</h1>
@@ -109,9 +100,6 @@ function StockAnalysis() {
           Historical, simulated future & recommendations
         </p>
       </div>
-
-      {/* News-Carousel
-      <NewsCarousel news={news} loading={loadingNews} /> */}
 
       {/* Charts & Recommendation */}
       {loadingAnalysis ? (
