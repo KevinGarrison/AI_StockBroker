@@ -3,7 +3,7 @@ function AnalysisChartGrafana({ ticker }) {
   const from = now - 1 * 365 * 24 * 60 * 60 * 1000;
   const to = now + 5 * 30 * 24 * 60 * 60 * 1000;
 
-  const grafanaUrl = `http://localhost:3000/d-solo/5ebe1847-cf11-4eda-9014-42397e806c97/history-and-forecast?orgId=1&panelId=1&theme=light&var-ticker=${ticker}&from=${from}&to=${to}`;
+  const grafanaUrl = `http://44.202.117.18:3000/d-solo/5ebe1847-cf11-4eda-9014-42397e806c97/history-and-forecast?orgId=1&panelId=1&theme=light&var-ticker=${ticker}&from=${from}&to=${to}`;
 
   return (
     <div className="bg-white rounded shadow p-4 hover-box">
