@@ -37,7 +37,11 @@ function CompanyFacts({ facts }) {
           <FactRow
             icon="fa-chart-bar"
             label="Revenue Growth"
-            value={`${(facts.revenue_growth * 100).toFixed(1)}%`}
+            value={
+              typeof facts.revenue_growth === "number"
+                ? `${(facts.revenue_growth * 100).toFixed(1)}%`
+                : "N/A"
+            }
           />
         </div>
 
@@ -46,30 +50,42 @@ function CompanyFacts({ facts }) {
           <FactRow
             icon="fa-dollar-sign"
             label="Current Price"
-            value={`$${facts.current_price.toFixed(2)}`}
+            value={`$${safeToFixed(facts.current_price, 2)}`}
           />
           <FactRow
             icon="fa-chart-line"
             label="Market Cap"
-            value={`$${Math.round(facts.market_cap / 1e9)}B`}
+            value={
+              typeof facts.market_cap === "number"
+                ? `$${Math.round(facts.market_cap / 1e9)}B`
+                : "N/A"
+            }
           />
           <FactRow
             icon="fa-balance-scale"
             label="Forward P/E"
-            value={facts.forward_pe.toFixed(2)}
+            value={safeToFixed(facts.forward_pe, 2)}
           />
           <FactRow
             icon="fa-percentage"
             label="Dividend Yield"
-            value={`${(facts.dividend_yield * 100).toFixed(2)}%`}
+            value={
+              typeof facts.dividend_yield === "number"
+                ? `${(facts.dividend_yield * 100).toFixed(2)}%`
+                : "N/A"
+            }
           />
           <FactRow
             icon="fa-globe"
             label="Website"
             value={
-              <a href={facts.website} target="_blank" rel="noopener noreferrer">
-                {facts.website}
-              </a>
+              facts.website ? (
+                <a href={facts.website} target="_blank" rel="noopener noreferrer">
+                  {facts.website}
+                </a>
+              ) : (
+                "N/A"
+              )
             }
           />
         </div>
@@ -78,24 +94,93 @@ function CompanyFacts({ facts }) {
   );
 }
 
+// Helper to safely use .toFixed() on numbers
+function safeToFixed(val, digits = 2, fallback = "N/A") {
+  return typeof val === "number" ? val.toFixed(digits) : fallback;
+}
+
 // Reusable FactRow component
 function FactRow({ icon, label, value }) {
   return (
-    <div className="d-flex align-items-center mb-2">
-      {/* Icon */}
-      <div className="me-2" style={{ width: "20px", color: "#1e88e5" }}>
-        <i className={`fas ${icon}`}></i>
+    <div className="d-flex mb-2 align-items-center flex-nowrap">
+      <div
+        className="me-2 d-flex"
+        style={{
+          width: "20px",
+          color: "#1e88e5",
+          flexShrink: 0,
+          lineHeight: "1.25",
+          marginTop: "1px",
+        }}
+      >
+        <i className={`fas ${icon}`} />
       </div>
 
-      {/* Label + Value container */}
-      <div className="d-flex justify-content-start w-100">
-        <div style={{ width: "130px", fontWeight: "bold" }}>{label}:</div>
-        <div className="flex-grow-1 text-wrap" style={{ marginLeft: "8px" }}>
+      {/* Label + Value */}
+      <div className="d-flex align-items-center flex-wrap w-100">
+        <div
+          style={{
+            minWidth: "130px",
+            fontWeight: "bold",
+            marginRight: "8px",
+            flexShrink: 0,
+          }}
+        >
+          {label}:
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            wordBreak: "break-word",
+            overflowWrap: "break-word",
+          }}
+        >
           {value}
         </div>
       </div>
     </div>
   );
 }
+
+
+// without Icons
+
+// function FactRow({ label, value }) {
+//   return (
+//     <div className="d-flex mb-2 align-items-start flex-nowrap">
+//       {/* Label + Value */}
+//       <div className="d-flex flex-wrap w-100">
+//         <div
+//           style={{
+//             minWidth: "130px",
+//             fontWeight: "bold",
+//             marginRight: "8px",
+//             flexShrink: 0,
+//           }}
+//         >
+//           {label}:
+//         </div>
+//         <div
+//           style={{
+//             flex: 1,
+//             minWidth: 0,
+//             wordBreak: "break-word",
+//             overflowWrap: "break-word",
+//           }}
+//         >
+//           {value}
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }
+
+
+
+
+
+
 
 export default CompanyFacts;
