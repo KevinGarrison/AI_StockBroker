@@ -12,7 +12,7 @@ function CompanySearchBar({ companyList, onSelectCompany }) {
         options={options}
         onChange={(selected) => {
           if (selected) {
-            onSelectCompany(selected.value); // Ticker wird übergeben
+            onSelectCompany(selected.value); // hand over ticker
           }
         }}
         placeholder="Search company..."

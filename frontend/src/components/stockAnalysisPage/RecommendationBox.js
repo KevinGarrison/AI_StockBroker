@@ -88,7 +88,7 @@ function RecommendationBox({ analysis }) {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `AI_Analysis_${ticker}.pdf`; // dynamischer Dateiname
+        link.download = `AI_Analysis_${ticker}.pdf`; // dynamic file name
         document.body.appendChild(link);
         link.click();
         link.remove();

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import CompanyFacts from "../components/companyDetailsPage/CompanyFacts";
 import CompanyChartGrafana from "../components/companyDetailsPage/CompanyChartGrafana";
+import HomeButton from "../components/common/HomeButton";
+import CompanyFactsLoadingScreen from "../components/companyDetailsPage/CompanyFactsLoadingScreen";
 
 
 function CompanyDetails() {
-  // const [history, setHistory] = useState(null);
   const [facts, setFacts] = useState(null);
   const params = new URLSearchParams(window.location.search);
   const ticker = params.get("company");
@@ -28,6 +29,7 @@ function CompanyDetails() {
 
   return (
     <div className="container my-5">
+      <HomeButton />
       {/* Header */}
       <div className="text-center mb-5">
         <h1 className="fw-bold display-5 text-primary">Company Dashboard</h1>
@@ -43,7 +45,8 @@ function CompanyDetails() {
       </div>
 
       {/* Facts and Chart */}
-      {facts && <CompanyFacts facts={facts} />}
+      {facts ? <CompanyFacts facts={facts} /> : <CompanyFactsLoadingScreen />}
+
       {ticker && <CompanyChartGrafana ticker={ticker} />}
 
       {/* AI Button */}

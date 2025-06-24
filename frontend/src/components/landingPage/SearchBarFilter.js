@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Select from "react-select";
 import { FaTimes, FaFilter } from "react-icons/fa";
 
-// Checkbox-Option für Screener-Filter
+// Checkbox-Option for Screener-Filter
 const CustomCheckboxOption = (props) => {
   const { data, isSelected, innerRef, innerProps } = props;
   return (
