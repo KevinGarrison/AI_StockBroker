@@ -1,0 +1,644 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 9,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "aepbqdx6pifi8d"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text"
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "_value frontend"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Frontend"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "_value grafana"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Grafana"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "_value influxdb"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "InfluxDB"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "_value nginx"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "NGINX"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "_value qdrant"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Qdrant"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "_value redis"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Redis"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.6.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"25s-cd-teamb\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"docker_container_logs\")\r\n  |> filter(fn: (r) => r._field == \"container_name\")\r\n  |> filter(fn: (r) => \"${container_name}\" == \"All\" or r._value == \"${container_name}\")\r\n  |> duplicate(column: \"_value\", as: \"container_val\") // ✨ clone\r\n  |> group(columns: [\"container_val\"])\r\n  |> count()\r\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Logs number",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "aepbqdx6pifi8d"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text"
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "container_name"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 126
+              },
+              {
+                "id": "custom.align",
+                "value": "center"
+              },
+              {
+                "id": "displayName",
+                "value": "Container"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "_time"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 202
+              },
+              {
+                "id": "displayName",
+                "value": "Timestamp"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "log_message"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Log Message"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Log Message"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 1184
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "log_level"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Level"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Container"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 87
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "id": 1,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "11.6.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"25s-cd-teamb\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"docker_container_logs\")\n  |> filter(fn: (r) => r._field == \"container_name\" or r._field == \"log_level\" or r._field == \"log_message\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => \n    (\"${container_name}\" == \"All\" or r.container_name == \"${container_name}\") and\n    (\"${log_level}\" == \"All\" or r.log_level == \"${log_level}\")\n  )\n  |> sort(columns: [\"_time\"], desc: true)\n  |> keep(columns: [\"_time\", \"container_name\", \"log_level\", \"log_message\"])\n",
+          "refId": "A"
+        }
+      ],
+      "title": "${container_name} Logs: ${log_level}",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "aepbqdx6pifi8d"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.6.0",
+      "targets": [
+        {
+          "query": "from(bucket: \"25s-cd-teamb\")\r\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\r\n  |> filter(fn: (r) => r._measurement == \"docker_container_logs\")\r\n  |> filter(fn: (r) => r._field == \"log_message\")\r\n  |> group(columns: [\"container_name\"])  \r\n  |> aggregateWindow(every: 5m, fn: count, createEmpty: false)\r\n",
+          "refId": "A"
+        }
+      ],
+      "title": "Log Activity",
+      "type": "timeseries"
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 41,
+  "tags": [
+    "logs",
+    "influxdb",
+    "docker"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allValue": "All",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "influxdb",
+          "uid": "aepbqdx6pifi8d"
+        },
+        "definition": "from(bucket: \"25s-cd-teamb\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_logs\")\n  |> filter(fn: (r) => r[\"_field\"] == \"container_name\")",
+        "includeAll": true,
+        "label": "Container Name",
+        "name": "container_name",
+        "options": [],
+        "query": {
+          "0": "i",
+          "1": "m",
+          "2": "p",
+          "3": "o",
+          "4": "r",
+          "5": "t",
+          "6": " ",
+          "7": "\"",
+          "8": "i",
+          "9": "n",
+          "10": "f",
+          "11": "l",
+          "12": "u",
+          "13": "x",
+          "14": "d",
+          "15": "a",
+          "16": "t",
+          "17": "a",
+          "18": "/",
+          "19": "i",
+          "20": "n",
+          "21": "f",
+          "22": "l",
+          "23": "u",
+          "24": "x",
+          "25": "d",
+          "26": "b",
+          "27": "/",
+          "28": "s",
+          "29": "c",
+          "30": "h",
+          "31": "e",
+          "32": "m",
+          "33": "a",
+          "34": "\"",
+          "35": "\n",
+          "36": "s",
+          "37": "c",
+          "38": "h",
+          "39": "e",
+          "40": "m",
+          "41": "a",
+          "42": ".",
+          "43": "t",
+          "44": "a",
+          "45": "g",
+          "46": "V",
+          "47": "a",
+          "48": "l",
+          "49": "u",
+          "50": "e",
+          "51": "s",
+          "52": "(",
+          "53": "b",
+          "54": "u",
+          "55": "c",
+          "56": "k",
+          "57": "e",
+          "58": "t",
+          "59": ":",
+          "60": " ",
+          "61": "\"",
+          "62": "2",
+          "63": "5",
+          "64": "s",
+          "65": "-",
+          "66": "c",
+          "67": "d",
+          "68": "-",
+          "69": "t",
+          "70": "e",
+          "71": "a",
+          "72": "m",
+          "73": "b",
+          "74": "\"",
+          "75": ",",
+          "76": " ",
+          "77": "t",
+          "78": "a",
+          "79": "g",
+          "80": ":",
+          "81": " ",
+          "82": "\"",
+          "83": "c",
+          "84": "o",
+          "85": "n",
+          "86": "t",
+          "87": "a",
+          "88": "i",
+          "89": "n",
+          "90": "e",
+          "91": "r",
+          "92": "_",
+          "93": "n",
+          "94": "a",
+          "95": "m",
+          "96": "e",
+          "97": "\"",
+          "98": ")",
+          "query": "from(bucket: \"25s-cd-teamb\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_logs\")\n  |> filter(fn: (r) => r[\"_field\"] == \"container_name\")"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": "All",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "influxdb",
+          "uid": "aepbqdx6pifi8d"
+        },
+        "definition": "from(bucket: \"25s-cd-teamb\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_logs\")\n  |> filter(fn: (r) => r[\"_field\"] == \"log_level\")",
+        "includeAll": true,
+        "label": "Log Level",
+        "name": "log_level",
+        "options": [],
+        "query": {
+          "0": "i",
+          "1": "m",
+          "2": "p",
+          "3": "o",
+          "4": "r",
+          "5": "t",
+          "6": " ",
+          "7": "\"",
+          "8": "i",
+          "9": "n",
+          "10": "f",
+          "11": "l",
+          "12": "u",
+          "13": "x",
+          "14": "d",
+          "15": "a",
+          "16": "t",
+          "17": "a",
+          "18": "/",
+          "19": "i",
+          "20": "n",
+          "21": "f",
+          "22": "l",
+          "23": "u",
+          "24": "x",
+          "25": "d",
+          "26": "b",
+          "27": "/",
+          "28": "s",
+          "29": "c",
+          "30": "h",
+          "31": "e",
+          "32": "m",
+          "33": "a",
+          "34": "\"",
+          "35": "\n",
+          "36": "s",
+          "37": "c",
+          "38": "h",
+          "39": "e",
+          "40": "m",
+          "41": "a",
+          "42": ".",
+          "43": "t",
+          "44": "a",
+          "45": "g",
+          "46": "V",
+          "47": "a",
+          "48": "l",
+          "49": "u",
+          "50": "e",
+          "51": "s",
+          "52": "(",
+          "53": "b",
+          "54": "u",
+          "55": "c",
+          "56": "k",
+          "57": "e",
+          "58": "t",
+          "59": ":",
+          "60": " ",
+          "61": "\"",
+          "62": "2",
+          "63": "5",
+          "64": "s",
+          "65": "-",
+          "66": "c",
+          "67": "d",
+          "68": "-",
+          "69": "t",
+          "70": "e",
+          "71": "a",
+          "72": "m",
+          "73": "b",
+          "74": "\"",
+          "75": ",",
+          "76": " ",
+          "77": "t",
+          "78": "a",
+          "79": "g",
+          "80": ":",
+          "81": " ",
+          "82": "\"",
+          "83": "l",
+          "84": "o",
+          "85": "g",
+          "86": "_",
+          "87": "l",
+          "88": "e",
+          "89": "v",
+          "90": "e",
+          "91": "l",
+          "92": "\"",
+          "93": ")",
+          "query": "from(bucket: \"25s-cd-teamb\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r[\"_measurement\"] == \"docker_container_logs\")\n  |> filter(fn: (r) => r[\"_field\"] == \"log_level\")"
+        },
+        "refresh": 1,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Docker Logs - InfluxDB (Interactive)",
+  "uid": "dept2bhdezzeoe",
+  "version": 16
+}

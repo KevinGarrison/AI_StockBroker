@@ -1,0 +1,7 @@
+from(bucket: "25s-cd-teamb")
+  |> range(start: -10y, stop: now())
+  |> filter(fn: (r) => 
+    r._measurement == "stock_price" and
+    r._field == "close_price_history" and
+    r.ticker == "${ticker}"
+  )
