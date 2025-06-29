@@ -16,7 +16,14 @@ logger = logging.getLogger(__name__)
 
 union_tickers = {}
 
-
+########################################################
+# Lifespan of the app: Gets all available companies by
+# taking the union of Yahoo finance and SEC.gov and 
+# stores the companies with their sec id and tickername
+# in some session state.
+# Before Ingesting the data with the next function wait
+# till the container is started completly.
+########################################################
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with httpx.AsyncClient() as client:
@@ -48,11 +55,16 @@ async def lifespan(app: FastAPI):
     yield
 
     union_tickers.clear()
+########################################################
 
+app = FastAPI(root_path="/api", lifespan=lifespan)
 
-app = FastAPI(lifespan=lifespan)
-
-
+########################################################
+# Timeseries data ingestion to influx from Yahoo Finance
+# Has to be done manually before after all containers 
+# are up or regularly via a cronjob, or some kind of
+# automation.
+########################################################
 @app.get("/data-ingest-yf-to-influx")
 async def ingest_data():
     async with httpx.AsyncClient() as client:
@@ -63,7 +75,7 @@ async def ingest_data():
         else:
             logger.error('[API-GATEWAY] Failed request Yahoo Finance data collection')
             return {'Status': 'Failed'}
-
+########################################################
 
 @app.get("/companies-for-dropdown")
 async def companies():

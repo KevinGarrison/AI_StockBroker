@@ -2,7 +2,6 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.encoders import jsonable_encoder
 from api_data_fetcher import API_Fetcher
-import yahooquery as yq
 import logging
 import tempfile
 import os

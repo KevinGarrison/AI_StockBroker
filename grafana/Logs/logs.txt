@@ -1,0 +1,15 @@
+container name : 
+
+from(bucket: "25s-cd-teamb")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r["_measurement"] == "docker_container_logs")
+  |> filter(fn: (r) => r["_field"] == "container_name")
+
+
+
+log level : 
+
+from(bucket: "25s-cd-teamb")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r["_measurement"] == "docker_container_logs")
+  |> filter(fn: (r) => r["_field"] == "log_level")
