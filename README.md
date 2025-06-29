@@ -1,4 +1,4 @@
-# 255-cd-teamB Project
+# 25-cdc-teamB Project
 
 ## Overview
 
@@ -228,7 +228,7 @@ These are declared in `docker-compose`:
 
 ## License
 
-MIT License — Team B, 255-CD Cohort
+MIT License — Team B, 25-CDC Cohort
 
 ---
 
