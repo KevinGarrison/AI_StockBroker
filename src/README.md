@@ -4,6 +4,63 @@
 
 This is a comprehensive cloud-native application built by Team B for the Cloud Distributed Computing course at Aalen University 2025. It includes multiple backend microservices, a React frontend, monitoring and logging tools (Grafana + Fluent Bit), time-series storage with InfluxDB, and containerized deployment with Docker Compose.
 
+## Authorship
+
+Below is an overview of code authorship, listing contributors and the files or components they created or co-developed.
+
+### Kevin Garrison
+- `src/backend/microservices/api_gateway/`
+- `src/backend/microservices/api_fetcher/`
+- `src/backend/microservices/rag_chatbot/`
+- `src/docker-compose.prod.yml`
+- `src/grafana/History/`
+- `api/`
+- `video/`
+- `redis` integration
+- `qdrant` integration
+- Deployment on AWS
+
+
+### Ilef Kalboussi
+- `src/backend/microservices/Influx/`
+- `src/grafana/Logs/`
+- `src/fluent-bit/`
+- `src/docker-compose.dev.yml`
+- `influxdb` integration
+- Grafana dashboard setup
+- Deployment on AWS
+
+### Pardis Ebrahimi
+- `backend/microservices/forecasting/`
+- `notebooks/timeseries_foecasting.ipynb`
+- `screenshots/`
+- InfluxDB data ingestion pipeline
+- Model selection and parameter tuning
+- Model evaluation 
+- Deployment on AWS
+
+
+### Lukas Hauser
+- `src/frontend`
+- `nginx/nginx.conf`
+- `wireframes/`
+- `src/.dockerignore`
+- `src/.gitignore`
+- `src/grafana/History`
+- `src/grafana/History & Forecast`
+- Deployment on AWS
+
+
+### Collaborative (Pair Programming / Shared Contributions)
+- `frontend/` project structure and shared components
+- `backend/` project structure and shared components 
+- `doc/` project structure and shared components
+- `.env.example` and system-wide environment setup
+- `README.md`, `LICENSE`, and documentation planning
+- LICENSE
+
+---
+
 ## Clean Code & Architecture Principles
 
 This project adheres to industry best practices to ensure high code quality, maintainability, and scalability.
