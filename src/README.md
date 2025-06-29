@@ -57,8 +57,6 @@ Below is an overview of code authorship, listing contributors and the files or c
 - `doc/` project structure and shared components
 - `.env.example` and system-wide environment setup
 - `README.md`, `LICENSE`, and documentation planning
-- LICENSE
-
 ---
 
 ## Clean Code & Architecture Principles
