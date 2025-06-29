@@ -13,10 +13,10 @@ Below is an overview of code authorship, listing contributors and the files or c
 - `src/backend/microservices/api_fetcher/`
 - `src/backend/microservices/rag_chatbot/`
 - `src/docker-compose.prod.yml`
-- `src/grafana/History/`
 - `api/`
 - `video/`
 - `redis` integration
+- `redis-insights` integration
 - `qdrant` integration
 - Deployment on AWS
 
@@ -41,7 +41,7 @@ Below is an overview of code authorship, listing contributors and the files or c
 
 
 ### Lukas Hauser
-- `src/frontend`
+- `src/frontend/`
 - `nginx/nginx.conf`
 - `wireframes/`
 - `src/.dockerignore`
