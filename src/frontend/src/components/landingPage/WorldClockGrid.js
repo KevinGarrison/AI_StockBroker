@@ -1,3 +1,5 @@
+// Author: Lukas Hauser
+
 import './WorldClockGrid.css'
 
 function WorldClockGrid({ cities, times }) {

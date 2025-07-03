@@ -1,3 +1,5 @@
+// Author: Lukas Hauser
+
 import LandingPage from "./pages/LandingPage";
 import CompanyDetails from "./pages/CompanyDetails";
 import StockAnalysis from "./pages/StockAnalysis";

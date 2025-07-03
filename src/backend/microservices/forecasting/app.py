@@ -1,3 +1,5 @@
+######### Author: Pardis Ebrahimi ##########
+
 from forecast_module import forecast_stock, prepare_forecast_data
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse

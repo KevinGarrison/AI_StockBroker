@@ -1,3 +1,5 @@
+######### Author: Kevin Garrison ##########
+
 from langchain.text_splitter import MarkdownTextSplitter, TokenTextSplitter
 from qdrant_client.http.models import VectorParams, Distance
 from langchain.output_parsers import PydanticOutputParser
@@ -312,17 +314,19 @@ class RAG_Chatbot:
         forecast_chart_path = None
 
         try:
+            # Get Logo
             response = requests.get(f"http://api-gateway:8000/get-logo/{ticker}", timeout=20)
             if response.status_code == 200:
                 tmp_logo = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
                 tmp_logo.write(response.content)
                 tmp_logo.close()
                 logo_path = tmp_logo.name
-
+                
+            # Get history
             response_hst = requests.get(f"http://influx-client:8004/history/{ticker}", timeout=None)
             logger.info('[RAG CHATBOT] requesting history from influx')
             history = response_hst.json()
-
+            # Get forecast
             response_fc = requests.get(f"http://influx-client:8004/forecast/{ticker}", timeout=None)
             logger.info('[RAG CHATBOT] requesting forecast from influx')
             forecast = response_fc.json()
@@ -424,7 +428,7 @@ class RAG_Chatbot:
                 self.set_text_color(50, 50, 50)
                 self.multi_cell(0, 6, text or "")  
                 self.ln(2)
-
+        # Create pdf
         pdf = PDF()
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.add_page()

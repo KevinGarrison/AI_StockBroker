@@ -1,3 +1,5 @@
+######### Author: Kevin Garrison ##########
+
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.encoders import jsonable_encoder

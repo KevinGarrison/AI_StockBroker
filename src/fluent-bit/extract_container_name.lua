@@ -1,3 +1,5 @@
+-- Author: Ilef Kalboussi --
+
 function extract_container_name(tag, timestamp, record)
     local log_file = record["log"]
     local container_id = record["container_id"]

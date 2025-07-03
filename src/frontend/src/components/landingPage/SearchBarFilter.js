@@ -1,8 +1,10 @@
+// Author: Lukas Hauser
+
 import { useEffect, useState } from "react";
 import Select from "react-select";
 import { FaTimes, FaFilter } from "react-icons/fa";
 
-// Checkbox-Option for Screener-Filter
+// Custom checkbox option for multi-select dropdown (screeners)
 const CustomCheckboxOption = (props) => {
   const { data, isSelected, innerRef, innerProps } = props;
   return (
@@ -25,12 +27,17 @@ const CustomCheckboxOption = (props) => {
 };
 
 function SearchBarFilters({ companyList }) {
+  // Screener & filter states
   const [screenerOptions, setScreenerOptions] = useState([]);
   const [selectedScreeners, setSelectedScreeners] = useState([]);
   const [marketCap, setMarketCap] = useState("");
   const [capUnit, setCapUnit] = useState("B");
+
+  // Company list state (filtered)
   const [filteredCompanyList, setFilteredCompanyList] = useState([]);
   const [isFiltering, setIsFiltering] = useState(false);
+
+  // UI control states
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState(null);
 
@@ -40,12 +47,14 @@ function SearchBarFilters({ companyList }) {
     { value: "T", label: "Trillion USD" },
   ];
 
+  // Normalize string (for ticker comparison)
   const simplify = (str) =>
     str
       .trim()
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, "");
 
+  // Load available screeners from API
   useEffect(() => {
     fetch("/api/screeners")
       .then((res) => res.json())
@@ -60,10 +69,12 @@ function SearchBarFilters({ companyList }) {
       .catch((err) => console.error("Failed to load screeners:", err));
   }, []);
 
+  // Reset filtered list when companyList changes
   useEffect(() => {
     setFilteredCompanyList(companyList);
   }, [companyList]);
 
+  // Main filter logic: screeners + optional market cap
   const applyFilter = async () => {
     setIsFiltering(true);
 
@@ -88,6 +99,7 @@ function SearchBarFilters({ companyList }) {
         ? numericCap * unitMultipliers[capUnit]
         : "";
 
+    // Select appropriate endpoint (with or without cap)
     const url =
       capInUSD && capInUSD > 0
         ? `/api/second-filter-market-cap/?${screenersQuery}&min_cap=${capInUSD}`
@@ -103,8 +115,8 @@ function SearchBarFilters({ companyList }) {
         ? data
         : [];
 
+      // Match filtered tickers with companyList
       const cleanedSimplified = tickers.map(simplify);
-
       const matching = companyList.filter((c) =>
         cleanedSimplified.includes(simplify(c.ticker))
       );
@@ -118,6 +130,7 @@ function SearchBarFilters({ companyList }) {
     }
   };
 
+  // Reset all filters to initial state
   const resetFilters = () => {
     setSelectedScreeners([]);
     setMarketCap("");
@@ -127,7 +140,7 @@ function SearchBarFilters({ companyList }) {
 
   return (
     <div className="text-center mt-4">
-      {/* Search Field */}
+      {/* Search field with live company list */}
       <div className="container mb-4" style={{ maxWidth: "700px" }}>
         <Select
           options={filteredCompanyList.map((company) => ({
@@ -139,19 +152,16 @@ function SearchBarFilters({ companyList }) {
           placeholder="🔍 Search company name..."
           isDisabled={isFiltering}
         />
-
+        {/* Spinner while filtering */}
         {isFiltering && (
-          <div
-            className="mb-3 d-flex justify-content-center align-items-center gap-2"
-            style={{ marginTop: "1.5rem" }}
-          >
+          <div className="mb-3 d-flex justify-content-center align-items-center gap-2" style={{ marginTop: "1.5rem" }}>
             <div className="spinner-border text-primary" role="status" />
             <span className="text-muted">Loading filtered companies…</span>
           </div>
         )}
       </div>
 
-      {/* Toggle Filter Button */}
+      {/* Toggle filter section */}
       <div className="mb-3">
         <button
           className="btn btn-outline-secondary d-inline-flex align-items-center gap-2"
@@ -161,12 +171,12 @@ function SearchBarFilters({ companyList }) {
         </button>
       </div>
 
-      {/* Filter Box */}
+      {/* Filter UI: screener + market cap */}
       {showFilters && (
         <div className="container mb-4" style={{ maxWidth: 700 }}>
           <div className="bg-white shadow rounded p-4 hover-box">
             <div className="row g-3 align-items-stretch">
-              {/* Screener Multi-Select */}
+              {/* Screener selection (max 3) */}
               <div className="col-12 col-md-6 text-start">
                 <label className="form-label fw-semibold">Screener</label>
                 <Select
@@ -211,7 +221,7 @@ function SearchBarFilters({ companyList }) {
                 </small>
               </div>
 
-              {/* Market Cap */}
+              {/* Market cap input + unit selector */}
               <div className="col-12 col-md-6 text-start">
                 <label className="form-label fw-semibold">
                   Market Cap (min)
@@ -236,28 +246,16 @@ function SearchBarFilters({ companyList }) {
                     }}
                   />
                   <div style={{ minWidth: "180px" }}>
-                    <div
-                      style={{
-                        minWidth: "180px",
-                        cursor:
-                          selectedScreeners.length === 0 || isFiltering
-                            ? "not-allowed"
-                            : "default",
-                      }}
-                    >
-                      <Select
-                        options={capUnitOptions}
-                        value={capUnitOptions.find(
-                          (opt) => opt.value === capUnit
-                        )}
-                        onChange={(selected) => setCapUnit(selected.value)}
-                        isDisabled={
-                          selectedScreeners.length === 0 || isFiltering
-                        }
-                        isSearchable={false}
-                        classNamePrefix="rs-capunit"
-                      />
-                    </div>
+                    <Select
+                      options={capUnitOptions}
+                      value={capUnitOptions.find((opt) => opt.value === capUnit)}
+                      onChange={(selected) => setCapUnit(selected.value)}
+                      isDisabled={
+                        selectedScreeners.length === 0 || isFiltering
+                      }
+                      isSearchable={false}
+                      classNamePrefix="rs-capunit"
+                    />
                   </div>
                 </div>
                 <div className="text-muted mt-1">
@@ -269,6 +267,8 @@ function SearchBarFilters({ companyList }) {
                 </div>
               </div>
             </div>
+
+            {/* Apply filter */}
             <div className="d-flex justify-content-end mt-3">
               <button
                 className="btn btn-primary"
@@ -282,7 +282,7 @@ function SearchBarFilters({ companyList }) {
         </div>
       )}
 
-      {/* Active Filter Badges */}
+      {/* Active filters as badges with remove buttons */}
       {(selectedScreeners.length > 0 || marketCap) && (
         <div className="text-center mb-4">
           {selectedScreeners.map((s) => (
@@ -316,7 +316,7 @@ function SearchBarFilters({ companyList }) {
         </div>
       )}
 
-      {/* Start Button */}
+      {/* Final start button to navigate to company details */}
       <div className="text-center mt-3">
         <button
           className="btn btn-primary btn-lg px-5"

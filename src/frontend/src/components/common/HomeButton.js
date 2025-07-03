@@ -1,3 +1,5 @@
+// Author: Lukas Hauser
+
 function HomeButton() {
   const goHome = () => {
     fetch("/api/delete-forecasts", { method: "POST" })

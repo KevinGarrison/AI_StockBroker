@@ -1,3 +1,5 @@
+// Author: Lukas Hauser
+
 import { useEffect, useState } from "react";
 import NewsCarousel from "../components/stockAnalysisPage/NewsCarousel";
 import ParseBrokerAnalysis from "../utils/ParseBrokerAnalysis";
@@ -11,18 +13,18 @@ function StockAnalysis() {
   const [loadingNews, setLoadingNews] = useState(true);
   const [modernAnalysis, setModernAnalysis] = useState(null);
   const [loadingAnalysis, setLoadingAnalysis] = useState(true);
-  const [facts, setFacts] = useState(null); //for heading
+  const [facts, setFacts] = useState(null); // used for displaying the company name
   const params = new URLSearchParams(window.location.search);
   const ticker = params.get("company");
 
   useEffect(() => {
     if (!ticker) return;
 
-    // delete cache before loading site
+    // Clear cached analysis data before fetching
     fetch("/api/delete-cache").then(() => {
       console.log("Cache deleted");
 
-      // ---------- COMPANY NEWS ----------
+      // --- Load company news ---
       setLoadingNews(true);
       const newsController = new AbortController();
       fetch(`/api/company-news/${ticker}`, { signal: newsController.signal })
@@ -37,19 +39,18 @@ function StockAnalysis() {
           if (!newsController.signal.aborted) setLoadingNews(false);
         });
 
-      // ---------- COMPANY DETAILS ---------
-      // fetching facts to get company name for heading
+      // --- Load company name for heading ---
       fetch(`/api/company-facts/${ticker}`)
         .then((res) => res.json())
         .then((data) => {
-          console.log("Company facts:", data); 
+          console.log("Company facts:", data);
           setFacts(data);
         })
         .catch((err) =>
           console.error("Error loading the company information:", err)
         );
 
-      // ---------- ANALYSIS ----------
+      // --- Load AI analysis (technical, fundamental, sentiment, etc.) ---
       setLoadingAnalysis(true);
       const analysisController = new AbortController();
       fetch(`/api/stock-broker-analysis/${ticker}`, {
@@ -59,11 +60,11 @@ function StockAnalysis() {
         .then((data) => {
           if (analysisController.signal.aborted) return;
 
-          console.log("[/stock-broker-analysis API Response]:", data); 
+          console.log("[/stock-broker-analysis API Response]:", data);
 
           if (data) {
-            const analysis = ParseBrokerAnalysis(data); 
-            console.log("[Parsed Analysis]:", analysis); 
+            const analysis = ParseBrokerAnalysis(data); // extract structured fields from markdown
+            console.log("[Parsed Analysis]:", analysis);
             setModernAnalysis(analysis);
           }
         })
@@ -74,7 +75,7 @@ function StockAnalysis() {
           if (!analysisController.signal.aborted) setLoadingAnalysis(false);
         });
 
-      // CLEAN-UP: Cancel both fetches when Effect restarts or unmounts component
+      // Abort fetches on component unmount or ticker change
       return () => {
         newsController.abort();
         analysisController.abort();
@@ -85,7 +86,8 @@ function StockAnalysis() {
   return (
     <div className="container my-5">
       <HomeButton />
-      {/* Header */}
+
+      {/* Page heading */}
       <div className="text-center mb-5">
         <h1 className="fw-bold display-5 text-primary">Analysis</h1>
 
@@ -101,23 +103,21 @@ function StockAnalysis() {
         </p>
       </div>
 
-      {/* Charts & Recommendation */}
+      {/* Show chart + recommendations or loading screen */}
       {loadingAnalysis ? (
         <AnalysisLoadingScreen />
       ) : (
         <>
-          {/* Charts & Simulation Placeholder */}
           <div className="mb-4">
             {ticker && <AnalysisChartGrafana ticker={ticker} />}
           </div>
-          {/* Recommendation */}
           <div className="mt-4">
             <RecommendationBox analysis={modernAnalysis} />
           </div>
         </>
       )}
 
-      {/* News-Carousel */}
+      {/* News carousel at the bottom */}
       <NewsCarousel news={news} loading={loadingNews} />
     </div>
   );

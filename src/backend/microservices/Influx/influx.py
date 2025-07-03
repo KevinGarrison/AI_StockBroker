@@ -1,3 +1,5 @@
+######### Author: Ilef Kalboussi ##########
+
 from influxdb_client import InfluxDBClient, Point, WriteOptions
 from influxdb_client.client.write_api import ASYNCHRONOUS
 from datetime import timedelta, datetime

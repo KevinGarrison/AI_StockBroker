@@ -1,6 +1,9 @@
+// Author: Lukas Hauser
+
 import { useState } from "react";
 import SecFileModal from "./SecFileModal";
 
+// Determine badge color based on recommendation type
 function badgeColor(rec) {
   if (rec.toUpperCase().includes("BUY")) return "success";
   if (rec.toUpperCase().includes("SELL")) return "danger";
@@ -24,7 +27,7 @@ function RecommendationBox({ analysis }) {
     risks,
   } = analysis;
 
-  // Fetch SEC reference docs when modal opens
+  // Fetch reference files when modal is opened
   const handleOpenModal = () => {
     const scrollbarWidth =
       window.innerWidth - document.documentElement.clientWidth;
@@ -41,12 +44,12 @@ function RecommendationBox({ analysis }) {
         console.log("Fetched reference docs:", data);
         const flat = Object.values(data).flat();
 
-        // remove sec file duplicates based on accession + filename
+        // Remove duplicates based on accession + filename
         const uniqueDocs = [];
         const seen = new Set();
 
         for (const doc of flat) {
-          const key = `${doc.accession}_${doc.filename}`; // unique id
+          const key = `${doc.accession}_${doc.filename}`;
           if (!seen.has(key)) {
             seen.add(key);
             uniqueDocs.push(doc);
@@ -64,12 +67,14 @@ function RecommendationBox({ analysis }) {
       });
   };
 
+  // Close modal and reset scroll behavior
   const handleCloseModal = () => {
     document.body.style.overflow = "auto";
     document.body.style.paddingRight = "0px";
     setShowModal(false);
   };
 
+  // Download full PDF analysis
   const handleDownload = () => {
     const params = new URLSearchParams(window.location.search);
     const ticker = params.get("company");
@@ -88,7 +93,7 @@ function RecommendationBox({ analysis }) {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `AI_Analysis_${ticker}.pdf`; // dynamic file name
+        link.download = `AI_Analysis_${ticker}.pdf`;
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -113,39 +118,28 @@ function RecommendationBox({ analysis }) {
         </h4>
       </div>
 
-      {/* Analysis Sections */}
+      {/* Technical / Fundamental / Sentiment sections */}
       <div className="row g-3">
-        {/* Technical */}
         <div className="col-md-4">
           <div className="p-3 rounded bg-light border h-100">
-            <div className="fw-bold text-primary mb-2">
-              Technical
-            </div>
+            <div className="fw-bold text-primary mb-2">Technical</div>
             <ul className="mb-0 small">
               {technical && technical.map((item, i) => <li key={i}>{item}</li>)}
             </ul>
           </div>
         </div>
-
-        {/* Fundamental */}
         <div className="col-md-4">
           <div className="p-3 rounded bg-light border h-100">
-            <div className="fw-bold text-primary mb-2">
-              Fundamental
-            </div>
+            <div className="fw-bold text-primary mb-2">Fundamental</div>
             <ul className="mb-0 small">
               {fundamental &&
                 fundamental.map((item, i) => <li key={i}>{item}</li>)}
             </ul>
           </div>
         </div>
-
-        {/* Sentiment */}
         <div className="col-md-4">
           <div className="p-3 rounded bg-light border h-100">
-            <div className="fw-bold text-primary mb-2">
-              Sentiment
-            </div>
+            <div className="fw-bold text-primary mb-2">Sentiment</div>
             <ul className="mb-0 small">
               {sentiment && sentiment.map((item, i) => <li key={i}>{item}</li>)}
             </ul>
@@ -153,7 +147,7 @@ function RecommendationBox({ analysis }) {
         </div>
       </div>
 
-      {/* Recommendation */}
+      {/* Main recommendation and justification */}
       {recommendation && (
         <div className="d-flex align-items-center mt-4 mb-3">
           <span
@@ -170,14 +164,14 @@ function RecommendationBox({ analysis }) {
         </div>
       )}
 
-      {/* Risks */}
+      {/* Optional risk warning */}
       {risks && (
         <div className="alert alert-warning mt-3">
           <b>Risks:</b> {risks}
         </div>
       )}
 
-      {/* Buttons */}
+      {/* Action buttons */}
       <div className="d-flex justify-content-end flex-wrap gap-2 mt-4">
         <button
           className="btn btn-outline-primary d-flex align-items-center gap-2 btn-hover-scale"
@@ -196,7 +190,7 @@ function RecommendationBox({ analysis }) {
         </button>
       </div>
 
-      {/* Modal with dynamic reference data */}
+      {/* SEC File Modal (dynamic) */}
       <SecFileModal
         data={modalData}
         loading={isLoadingModalData}

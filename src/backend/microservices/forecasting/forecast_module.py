@@ -1,3 +1,5 @@
+######### Author: Pardis Ebrahimi ##########
+
 from neuralforecast import NeuralForecast
 from neuralforecast.models import RNN
 import pandas as pd

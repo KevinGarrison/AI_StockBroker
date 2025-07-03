@@ -1,3 +1,5 @@
+// Author: Lukas Hauser
+
 function AnalysisLoadingScreen() {
   return (
     <div className="text-center my-5">

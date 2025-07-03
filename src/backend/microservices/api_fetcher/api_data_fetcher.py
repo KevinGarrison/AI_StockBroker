@@ -1,3 +1,6 @@
+######### Author: Kevin Garrison ##########
+
+
 from docling.document_converter import DocumentConverter
 from docling.datamodel.base_models import DocumentStream
 from dataclasses import dataclass, field
@@ -371,6 +374,9 @@ class API_Fetcher:
                 
 
     def preclean_for_llm(self, text: str = None) -> str:
+        '''
+        This function parses the raw html content for the llm input
+        '''
         if text is None:
             return ""
 
@@ -392,6 +398,9 @@ class API_Fetcher:
 
 
     async def preprocess_docs_content(self, series: pd.Series) -> pd.Series:
+        '''
+        This function turns the raw html to markdown
+        '''
         series = series.copy()
         cleaned_series = pd.Series(index=series.index, dtype=object)
 
@@ -437,13 +446,13 @@ class API_Fetcher:
             all_data['cik'] = str(row["cik_str"]).zfill(10)
             all_data['company_title'] = row["title"]
 
-            # Step 2: Yahoo Finance Data
+            # Step 2: Fetch Yahoo Finance Data
             task_2 = time.time()
             yf_data = await self.fetch_selected_stock_facts_yq(selected_ticker=ticker)
             all_data['yf_stock_data'] = yf_data
             logger.info(f"[{ticker}] Step 2 - Fetched Yahoo Finance data - {time.time() - task_2:.2f}s")
 
-            # Step 3: SEC Data
+            # Step 3: Fetch SEC company identification
             task_3 = time.time()
             details_1, details_2, filing_accessions = await self.fetch_selected_company_details_and_filing_accessions(
                 selected_cik=all_data['cik']
@@ -453,7 +462,7 @@ class API_Fetcher:
             all_data['sec_details_2'] = details_2
             all_data['filing_accessions'] = filing_accessions
 
-            # Step 4: Map latest documents
+            # Step 4: Map latest documents (latest docs)
             task_4 = time.time()
             all_data['mapping_latest_docs'] = self.get_latest_filings_index(filings=all_data['filing_accessions'])
             logger.info(f"[{ticker}] Step 4 - Get SEC documents index - {time.time() - task_4:.2f}s")
@@ -464,7 +473,7 @@ class API_Fetcher:
                 cik=all_data['cik']
             )
 
-            # Step 5: Fetch filings
+            # Step 5: Fetch all latest reports
             task_5 = time.time()
             docs_content_series = await self.fetch_all_filings(base_sec_df=all_data['base_sec_df'])
             logger.info(f"[{ticker}] Step 5 - Fetch SEC documents - {time.time() - task_5:.2f}s")

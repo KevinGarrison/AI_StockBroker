@@ -1,18 +1,21 @@
+// Author: Lukas Hauser
+
 import React, { useEffect, useState } from "react";
 
 function NewsCarousel({ news, loading, interval = 8000 }) {
   const [current, setCurrent] = useState(0);
 
+  // Auto-rotate through news items in given interval
   useEffect(() => {
     if (!news || news.length === 0) return;
     const timer = setInterval(() => {
       setCurrent((prev) => (prev + 1) % news.length);
     }, interval);
-    return () => clearInterval(timer);
+    return () => clearInterval(timer); // Cleanup on unmount
   }, [news, interval]);
 
   if (loading) {
-    return null;
+    return null; // Show nothing while loading
   }
 
   if (!news || news.length === 0) {
@@ -25,6 +28,7 @@ function NewsCarousel({ news, loading, interval = 8000 }) {
 
   return (
     <>
+      {/* Embedded CSS for animation and style */}
       <style>
         {`
           .news-carousel {
@@ -49,13 +53,15 @@ function NewsCarousel({ news, loading, interval = 8000 }) {
           }
         `}
       </style>
+
+      {/* News card with animated content */}
       <div
         className="card bg-white rounded shadow p-4 hover-box mb-4"
         style={{ minHeight: "150px" }}
       >
+        {/* Header */}
         <div
           style={{
-            minHeight: "120",
             letterSpacing: "2px",
             fontWeight: 700,
             color: "#1565c0",
@@ -70,6 +76,8 @@ function NewsCarousel({ news, loading, interval = 8000 }) {
         >
           Company News
         </div>
+
+        {/* News content with optional image */}
         <div className="d-flex align-items-center fade-in-right w-100">
           {currentNews.thumbnail?.resolutions?.[1]?.url && (
             <img
@@ -79,6 +87,8 @@ function NewsCarousel({ news, loading, interval = 8000 }) {
               style={{ width: 90, height: 70, objectFit: "cover" }}
             />
           )}
+
+          {/* News text content */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <a
               href={currentNews.clickThroughUrl?.url || "#"}
@@ -95,10 +105,14 @@ function NewsCarousel({ news, loading, interval = 8000 }) {
             >
               {currentNews.title}
             </a>
+
+            {/* Source and publication date */}
             <div className="small text-secondary mb-1">
               {currentNews.provider?.displayName} –{" "}
               {new Date(currentNews.pubDate).toLocaleString()}
             </div>
+
+            {/* Summary preview with ellipsis clamp */}
             <div
               className="small"
               style={{

@@ -1,3 +1,5 @@
+######### Author: Kevin Garrison ##########
+
 from fastapi.responses import Response, JSONResponse
 from fastapi import FastAPI, HTTPException, Query
 from contextlib import asynccontextmanager
@@ -172,13 +174,14 @@ async def delete_cache():
 @app.get("/stock-broker-analysis/{ticker}")
 async def stock_broker_analysis(ticker: str):
     async with httpx.AsyncClient() as client:
-        # Step 1: SEC Data
+        # Step 1: Fetching files from SEC.gov
         all_company_data = await client.get(f"http://api-fetcher:8001/company-context/{ticker}", timeout=None)
         company_json = all_company_data.json()
         logger.info("[AI Result 1]: SEC files pulled")
 
         forecast_json = {}
         try:
+            # Step 2: Calling the forecasting microservice 
             forecast = await client.get(f"http://forecasting:8003/forecast/{ticker}", timeout=None)
             if forecast.status_code == 200:
                 forecast_json = forecast.json()
@@ -199,7 +202,7 @@ async def stock_broker_analysis(ticker: str):
                     "history": round_forecast_data(forecast_json.get("history", []))     
                 }
                 logger.info(f"[AI Result 2]: Forecast [{forecast_data}]")
-
+                # Step 3: writing forecast in influxdb
                 influx_post = await client.post(
                     f"http://influx-client:8004/write-forecast-to-influx/{ticker}",
                     json={"history": forecast_data},
@@ -215,6 +218,7 @@ async def stock_broker_analysis(ticker: str):
             company_json['forecast'] = []
 
         try:
+            # Step 5 (Final): Calling the AI Agent to get the stock recommendation
             response = await client.post(
                 f"http://rag-chatbot:8002/relevant-sec-files/{ticker}",
                 json=company_json,

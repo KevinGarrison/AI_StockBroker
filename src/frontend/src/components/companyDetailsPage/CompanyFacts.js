@@ -1,8 +1,11 @@
+// Author: Lukas Hauser
+
 import { useEffect, useState } from "react";
 
 function CompanyFacts({ facts }) {
   const [tickerMap, setTickerMap] = useState({});
 
+  // Load full company names (mapped by ticker)
   useEffect(() => {
     fetch("/api/companies-df")
       .then((res) => res.json())
@@ -18,6 +21,7 @@ function CompanyFacts({ facts }) {
       });
   }, []);
 
+  // Try to display the full company name; fallback if not found
   const displayName = tickerMap[facts.ticker] || "Company Name";
 
   return (
@@ -94,12 +98,12 @@ function CompanyFacts({ facts }) {
   );
 }
 
-// Helper to safely use .toFixed() on numbers
+// Safe formatting of numbers (returns fallback if not a number)
 function safeToFixed(val, digits = 2, fallback = "N/A") {
   return typeof val === "number" ? val.toFixed(digits) : fallback;
 }
 
-// Reusable FactRow component
+// UI block for each row of fact info with icon, label, and value
 function FactRow({ icon, label, value }) {
   return (
     <div className="d-flex mb-2 align-items-center flex-nowrap">
@@ -143,44 +147,5 @@ function FactRow({ icon, label, value }) {
     </div>
   );
 }
-
-
-// without Icons
-
-// function FactRow({ label, value }) {
-//   return (
-//     <div className="d-flex mb-2 align-items-start flex-nowrap">
-//       {/* Label + Value */}
-//       <div className="d-flex flex-wrap w-100">
-//         <div
-//           style={{
-//             minWidth: "130px",
-//             fontWeight: "bold",
-//             marginRight: "8px",
-//             flexShrink: 0,
-//           }}
-//         >
-//           {label}:
-//         </div>
-//         <div
-//           style={{
-//             flex: 1,
-//             minWidth: 0,
-//             wordBreak: "break-word",
-//             overflowWrap: "break-word",
-//           }}
-//         >
-//           {value}
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
-
-
-
-
-
-
 
 export default CompanyFacts;

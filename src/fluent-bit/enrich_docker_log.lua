@@ -1,3 +1,5 @@
+-- Author: Ilef Kalboussi --
+
 function enrich_log_record(tag, timestamp, record)
     -- Rename log to log_message if present
     if record["log"] then

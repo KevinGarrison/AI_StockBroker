@@ -1,16 +1,18 @@
+// Author: Lukas Hauser
+
 import ReactDOM from "react-dom";
 
 function SecFileModal({ data, show, onClose, loading }) {
-  
-  if (!show) return null;
+  if (!show) return null; // Don't render if modal is not active
 
-  // Opens the document in a new tab
+  // Open HTML report in a new browser tab
   const openInNewTab = (html) => {
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");
   };
 
+  // Render modal using a React Portal to attach to document.body
   return ReactDOM.createPortal(
     <div
       className="modal show"
@@ -39,6 +41,7 @@ function SecFileModal({ data, show, onClose, loading }) {
         }}
       >
         <div className="modal-content" style={{ overflow: "hidden" }}>
+          {/* Modal Header */}
           <div className="modal-header">
             <h5 className="modal-title">SEC Files</h5>
             <button
@@ -49,6 +52,7 @@ function SecFileModal({ data, show, onClose, loading }) {
             ></button>
           </div>
 
+          {/* Modal Body: loading, file list, or fallback */}
           <div
             className="modal-body"
             style={{
